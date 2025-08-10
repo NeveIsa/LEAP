@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+duckdb
+sqlalchemy
+duckdb-engine
+pydantic
