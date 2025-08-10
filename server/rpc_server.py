@@ -1,8 +1,8 @@
 # rpc_server.py
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Optional, Literal
 import importlib
 import inspect
 import json
@@ -97,16 +97,34 @@ def healthz():
 
 class AddStudentBody(BaseModel):
     student_id: str
+    name: str
+    email: Optional[str] = None
 
 @app.post("/admin/add-student")
 def add_student(body: AddStudentBody):
-    storage.add_student(body.student_id)
+    storage.add_student(student_id=body.student_id, name=body.name, email=body.email)
     return {"status": "ok"}
 
 @app.get("/admin/students")
 def list_all_students():
     """Returns a list of all registered student IDs."""
     return {"students": storage.list_students()}
+
+@app.get("/admin/logs")
+def get_server_logs(
+    n: int = Query(100, ge=1, le=1000, description="Number of logs to retrieve"),
+    student_id: Optional[str] = Query(None, description="Optional: Filter logs by student ID."),
+    order: Literal["latest", "earliest"] = Query("latest", description="Sort order: 'latest' or 'earliest'")
+):
+    """Returns the last N log events from the server, with optional filtering and ordering."""
+    db_order = "desc" if order == "latest" else "asc"
+    if student_id:
+        if not storage.student_exists(student_id):
+            raise HTTPException(status_code=404, detail=f"Student ID '{student_id}' not found.")
+        logs = storage.fetch_logs_for_student(student_id=student_id, limit=n, order=db_order)
+    else:
+        logs = storage.fetch_logs(limit=n, order=db_order)
+    return {"logs": logs}
 
 if __name__ == "__main__":
     import uvicorn
