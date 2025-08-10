@@ -119,6 +119,14 @@ def list_all_students():
     """Returns a list of all registered student IDs."""
     return {"students": storage.list_students()}
 
+@app.delete("/admin/student/{student_id}", status_code=200)
+def remove_student(student_id: str):
+    """Deletes a student and all of their associated logs."""
+    was_deleted = storage.delete_student(student_id)
+    if not was_deleted:
+        raise HTTPException(status_code=404, detail=f"Student ID '{student_id}' not found.")
+    return {"status": "ok", "message": f"Student '{student_id}' and all associated logs have been deleted."}
+
 @app.get("/admin/logs")
 def get_server_logs(
     n: int = Query(100, ge=1, le=1000, description="Number of logs to retrieve"),

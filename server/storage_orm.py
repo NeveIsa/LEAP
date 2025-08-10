@@ -10,7 +10,7 @@ from typing import Optional, List, Dict, Any
 import os
 import datetime
 
-from sqlalchemy import create_engine, String, Integer, DateTime, Text, select, Sequence, asc, desc
+from sqlalchemy import create_engine, String, Integer, DateTime, Text, select, Sequence, asc, desc, delete
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 # ---------------------------------------------------------------------
@@ -64,13 +64,26 @@ def student_exists(student_id: str) -> bool:
 
 
 def list_students() -> List[Dict[str, Any]]:
-    """Returns a list of all registered student IDs."""
+    """Returns a list of all registered students."""
     with SessionLocal() as s:
         students = s.execute(select(Student).order_by(Student.student_id)).scalars().all()
         return [
             {"student_id": s.student_id, "name": s.name, "email": s.email}
             for s in students
         ]
+
+def delete_student(student_id: str) -> bool:
+    """Deletes a student and all their associated logs. Returns True if deleted, False otherwise."""
+    with SessionLocal() as s:
+        student = s.get(Student, student_id)
+        if student:
+            # Delete logs first
+            s.execute(delete(Log).where(Log.student_id == student_id))
+            # Then delete the student
+            s.delete(student)
+            s.commit()
+            return True
+        return False
 
 
 def log_event(*, student_id: str, func_name: str, args_json: str, result_json: Optional[str], error: Optional[str]) -> None:

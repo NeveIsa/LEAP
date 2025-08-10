@@ -73,9 +73,9 @@ class RPCClient:
         if not self._function_cache:
             print("Could not retrieve function list from the server.")
             return
-        print("Available remote functions:")
+        print("Available remote functions:\n")
         for name, info in self._function_cache.items():
-            print(f"- {name}{info.get('signature', '()')}")
+            print(f"- {name}{info.get('signature', '()')}\n")
 
 
 if __name__ == '__main__':
