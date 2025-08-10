@@ -103,6 +103,11 @@ def add_student(body: AddStudentBody):
     storage.add_student(body.student_id)
     return {"status": "ok"}
 
+@app.get("/admin/students")
+def list_all_students():
+    """Returns a list of all registered student IDs."""
+    return {"students": storage.list_students()}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("rpc_server:app", host="0.0.0.0", port=9000, reload=False)

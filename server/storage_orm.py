@@ -60,6 +60,14 @@ def student_exists(student_id: str) -> bool:
     with SessionLocal() as s:
         return s.get(Student, student_id) is not None
 
+
+def list_students() -> List[str]:
+    """Returns a list of all registered student IDs."""
+    with SessionLocal() as s:
+        rows = s.execute(select(Student.student_id).order_by(Student.student_id)).scalars().all()
+        return list(rows)
+
+
 def log_event(*, student_id: str, func_name: str, args_json: str, result_json: Optional[str], error: Optional[str]) -> None:
     with SessionLocal() as s:
         s.add(Log(student_id=student_id, func_name=func_name, args_json=args_json, result_json=result_json, error=error))
