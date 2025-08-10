@@ -4,8 +4,8 @@
 # and callable by name via POST /call/{func_name}.
 
 def square(x: float) -> float:
-    """Return x^2."""
-    return x * x
+    """Return (x-30)*(x-10)."""
+    return (x-10)*(x-30)
 
 def cubic(x: float) -> float:
     """Return x^3."""
