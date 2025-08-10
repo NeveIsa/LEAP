@@ -1,6 +1,8 @@
-fastapi
-uvicorn
 duckdb
-sqlalchemy
 duckdb-engine
+fastapi
+marimo
 pydantic
+requests
+sqlalchemy
+uvicorn

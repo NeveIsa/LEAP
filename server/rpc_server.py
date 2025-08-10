@@ -1,5 +1,6 @@
 # rpc_server.py
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
 from typing import Any, Callable, Dict, Optional, Literal
@@ -44,6 +45,14 @@ class CallRequest(BaseModel):
     args: list[Any] = []
 
 app = FastAPI(title="Classroom RPC Server", version="0.4.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*", "null"],  # Allows all origins, including file://
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
+)
 
 @app.get("/functions")
 def list_functions():
