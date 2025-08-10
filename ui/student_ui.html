@@ -104,7 +104,7 @@
             align-items: center;
         }
 
-        #dice-output {
+        #dice-output, #double-dice-output {
             font-size: 4rem; /* Larger size for dice */
         }
 
@@ -112,7 +112,7 @@
             font-size: 1.5rem;
         }
         
-        #dice-value, #coin-value {
+        #dice-value, #coin-value, #double-dice-value {
             font-size: 1.2rem;
             margin-top: 5px;
             color: var(--secondary-color);
@@ -166,6 +166,23 @@
             animation: roll 0.5s ease-out;
         }
 
+        .interval-inputs {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .interval-inputs input {
+            width: 80px;
+            padding: 5px;
+            border-radius: 3px;
+            border: 1px solid var(--border-color);
+            background-color: var(--background-color);
+            color: var(--secondary-color);
+            text-align: center;
+        }
+
     </style>
 </head>
 <body>
@@ -174,14 +191,6 @@
             <h1>Student Interactives</h1>
         </header>
         <div class="grid-container">
-            <!-- Rolling Dice -->
-            <div class="grid-item">
-                <h3>Roll a Die</h3>
-                <div class="output" id="dice-output">⚅</div>
-                <div id="dice-value">Value: 6</div>
-                <button class="btn" id="dice-btn">Roll</button>
-            </div>
-
             <!-- Flipping Coin -->
             <div class="grid-item">
                 <h3>Flip a Coin</h3>
@@ -195,6 +204,22 @@
                 <button class="btn" id="coin-btn">Flip</button>
             </div>
 
+            <!-- Rolling Dice -->
+            <div class="grid-item">
+                <h3>Roll a Die</h3>
+                <div class="output" id="dice-output">⚅</div>
+                <div id="dice-value">Value: 6</div>
+                <button class="btn" id="dice-btn">Roll</button>
+            </div>
+
+            <!-- Double Dice Rolls -->
+            <div class="grid-item">
+                <h3>Roll Two Dice</h3>
+                <div class="output" id="double-dice-output">⚀⚅</div>
+                <div id="double-dice-value">Value: 7</div>
+                <button class="btn" id="double-dice-btn">Roll</button>
+            </div>
+
             <!-- Random Number -->
             <div class="grid-item">
                 <h3>Random Number (1-100)</h3>
@@ -202,11 +227,22 @@
                 <button class="btn" id="random-num-btn">Generate</button>
             </div>
 
-            <!-- Standard Normal Deviate -->
+            <!-- Random Number (-100 to 100) -->
             <div class="grid-item">
-                <h3>Standard Normal Deviate</h3>
-                <div class="output" id="normal-dev-output">Z</div>
-                <button class="btn" id="normal-dev-btn">Generate</button>
+                <h3>Random Number (-100 to 100)</h3>
+                <div class="output" id="random-num-neg-output">?</div>
+                <button class="btn" id="random-num-neg-btn">Generate</button>
+            </div>
+
+            <!-- Random Number by Interval -->
+            <div class="grid-item">
+                <h3>Random Number from Interval</h3>
+                <div class="interval-inputs">
+                    <input type="number" id="min-interval" placeholder="Min" style="width: 60px;">
+                    <input type="number" id="max-interval" placeholder="Max" style="width: 60px;">
+                </div>
+                <div class="output" id="interval-random-num-output">?</div>
+                <button class="btn" id="interval-random-num-btn">Generate</button>
             </div>
 
             <!-- 2D Random Point -->
@@ -223,10 +259,12 @@
                 <button class="btn" id="2d-gaussian-btn">Generate</button>
             </div>
 
-            <!-- Empty Cells -->
-            <div class="grid-item empty"></div>
-            <div class="grid-item empty"></div>
-            <div class="grid-item empty"></div>
+            <!-- Standard Normal Deviate -->
+            <div class="grid-item">
+                <h3>Standard Normal Deviate</h3>
+                <div class="output" id="normal-dev-output">Z</div>
+                <button class="btn" id="normal-dev-btn">Generate</button>
+            </div>
         </div>
     </div>
 
@@ -303,6 +341,50 @@
             const z1 = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
             const z2 = Math.sqrt(-2.0 * Math.log(u1)) * Math.sin(2.0 * Math.PI * u2);
             gaussianOutput.textContent = `(${z1.toFixed(3)}, ${z2.toFixed(3)})`;
+        });
+
+        // Double Dice Roll
+        document.getElementById('double-dice-btn').addEventListener('click', () => {
+            const doubleDiceOutput = document.getElementById('double-dice-output');
+            const doubleDiceValue = document.getElementById('double-dice-value');
+            
+            doubleDiceOutput.classList.add('rolling');
+            
+            setTimeout(() => {
+                const result1 = Math.floor(Math.random() * 6) + 1;
+                const result2 = Math.floor(Math.random() * 6) + 1;
+                const diceFaces = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+                doubleDiceOutput.textContent = diceFaces[result1 - 1] + diceFaces[result2 - 1];
+                doubleDiceValue.textContent = `Value: ${result1 + result2}`;
+                doubleDiceOutput.classList.remove('rolling');
+            }, 500);
+        });
+
+        // Random Number (-100 to 100)
+        document.getElementById('random-num-neg-btn').addEventListener('click', () => {
+            const randomNumNegOutput = document.getElementById('random-num-neg-output');
+            const result = Math.floor(Math.random() * 201) - 100;
+            randomNumNegOutput.textContent = result;
+        });
+
+        // Random Number by Interval
+        document.getElementById('interval-random-num-btn').addEventListener('click', () => {
+            const min = parseInt(document.getElementById('min-interval').value);
+            const max = parseInt(document.getElementById('max-interval').value);
+            const intervalRandomNumOutput = document.getElementById('interval-random-num-output');
+
+            if (isNaN(min) || isNaN(max)) {
+                intervalRandomNumOutput.textContent = 'Invalid Input';
+                return;
+            }
+
+            if (min >= max) {
+                intervalRandomNumOutput.textContent = 'Min < Max';
+                return;
+            }
+
+            const result = Math.floor(Math.random() * (max - min + 1)) + min;
+            intervalRandomNumOutput.textContent = result;
         });
 
     </script>
