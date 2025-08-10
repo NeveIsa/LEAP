@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Logs Line Plot</title>
+  <link rel="stylesheet" href="https://unpkg.com/uplot/dist/uPlot.min.css" />
+  <link rel="stylesheet" href="../style/main.css" />
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1>Student Logs Line Plot</h1>
+      <p class="subtle">Plots the last 100 logs by timestamp; each student is a separate series.</p>
+
+      <div class="toolbar">
+        <span class="badge" id="countBadge">Loading…</span>
+        <a href="../dashboard.html">← Back to Dashboard</a>
+      </div>
+
+      <div id="plot"></div>
+      <div class="legend" id="legend"></div>
+      <div class="message" id="message"></div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/uplot/dist/uPlot.iife.min.js"></script>
+  <script>
+    const API_BASE_URL = window.location.origin;
+
+    async function fetchLogs() {
+      try {
+        const res = await fetch(`${API_BASE_URL}/logs?n=100&order=earliest`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        return data.logs || [];
+      } catch (e) {
+        console.error('Failed to fetch logs', e);
+        setMessage('Failed to fetch logs. Is the server running?');
+        return null;
+      }
+    }
+
+    function setMessage(msg) {
+      document.getElementById('message').textContent = msg || '';
+    }
+
+    function tryParseNumber(v) {
+      if (v == null) return NaN;
+      try {
+        // result_json is stored as a JSON string; try JSON.parse first
+        const parsed = typeof v === 'string' ? JSON.parse(v) : v;
+        if (typeof parsed === 'number') return parsed;
+        const f = parseFloat(parsed);
+        return Number.isFinite(f) ? f : NaN;
+      } catch {
+        const f = parseFloat(v);
+        return Number.isFinite(f) ? f : NaN;
+      }
+    }
+
+    function prepareSeries(logs) {
+      // Unique, sorted timestamps (ms since epoch)
+      const timesSet = new Set();
+      const byStudent = new Map(); // student_id -> Map(ts -> value)
+
+      for (const log of logs) {
+        const t = Date.parse(log.ts);
+        if (!Number.isFinite(t)) continue;
+        timesSet.add(t);
+
+        const sid = log.student_id || 'unknown';
+        const y = tryParseNumber(log.result_json);
+        if (!byStudent.has(sid)) byStudent.set(sid, new Map());
+        // if multiple at same ts, overwrite with latest in order; fine
+        byStudent.get(sid).set(t, Number.isFinite(y) ? y : NaN);
+      }
+
+      const xs = Array.from(timesSet).sort((a, b) => a - b);
+
+      // Build aligned Y arrays per student
+      const students = Array.from(byStudent.keys()).sort();
+      const ys = students.map(sid => xs.map(ts => {
+        const v = byStudent.get(sid).get(ts);
+        return v === undefined ? NaN : v;
+      }));
+
+      return { xs, students, ys };
+    }
+
+    function renderLegend(students, colors) {
+      const el = document.getElementById('legend');
+      el.innerHTML = '';
+      students.forEach((sid, i) => {
+        const item = document.createElement('div');
+        item.className = 'legend-item';
+        const sw = document.createElement('span');
+        sw.className = 'swatch';
+        sw.style.background = colors[i % colors.length];
+        const label = document.createElement('span');
+        label.textContent = sid;
+        item.appendChild(sw);
+        item.appendChild(label);
+        el.appendChild(item);
+      });
+    }
+
+    async function main() {
+      const logs = await fetchLogs();
+      if (!logs) return;
+
+      document.getElementById('countBadge').textContent = `${logs.length} logs`;
+      if (logs.length === 0) {
+        setMessage('No logs available yet. Try invoking some functions.');
+        return;
+      }
+
+      const { xs, students, ys } = prepareSeries(logs);
+
+      if (xs.length === 0 || students.length === 0) {
+        setMessage('No plottable numeric results found in the last 100 logs.');
+        return;
+      }
+
+      const colors = [
+        '#00f5d4', '#f15bb5', '#fee440', '#00bbf9', '#9b5de5',
+        '#ef476f', '#06d6a0', '#ffd166', '#118ab2', '#073b4c',
+      ];
+
+      const series = [
+        { label: 'time' },
+        ...students.map((sid, i) => ({
+          label: sid,
+          stroke: colors[i % colors.length],
+          width: 2,
+          spanGaps: true,
+        }))
+      ];
+
+      const data = [xs, ...ys];
+
+      const opts = {
+        title: 'Last 100 Logs',
+        width: document.getElementById('plot').clientWidth,
+        height: 420,
+        series,
+        axes: [
+          {
+            scale: 'x',
+            label: 'Time',
+            stroke: '#00f5d4', // Bright axis color
+            grid: { show: true },
+            values: (u, splits) => splits.map(v => new Date(v).toLocaleTimeString())
+          },
+          {
+            scale: 'y',
+            label: 'Result',
+            stroke: '#00f5d4', // Bright axis color
+            grid: { show: true }
+          }
+        ],
+        scales: {
+          x: { time: true }
+        },
+        hooks: {
+          setSize: [u => { /* keep container height */ }]
+        }
+      };
+
+      const plotEl = document.getElementById('plot');
+      const u = new uPlot(opts, data, plotEl);
+      renderLegend(students, colors);
+
+      // Handle simple responsiveness
+      let resizeTO;
+      window.addEventListener('resize', () => {
+        clearTimeout(resizeTO);
+        resizeTO = setTimeout(() => {
+          u.setSize({ width: plotEl.clientWidth, height: 420 });
+        }, 100);
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', main);
+  </script>
+</body>
+</html>

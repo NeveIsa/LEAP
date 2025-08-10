@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Random Actions</title>
+  <link rel="stylesheet" href="style/main.css" />
+  <style>
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-bottom: 16px; }
+    .controls .field { display: flex; flex-direction: column; gap: 6px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .tile { background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+    .tile h3 { margin: 0; color: var(--primary-color); font-size: 16px; font-weight: 600; }
+    .result { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace; font-size: 14px; color: #cbd5e1; }
+    .msg { font-size: 13px; color: var(--muted-color); min-height: 1.2em; }
+    .msg.ok { color: var(--success-color); }
+    .msg.err { color: var(--error-color); }
+    .coming { color: var(--muted-color); font-style: italic; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Random Actions</h1>
+    <div class="controls">
+      <div class="field">
+        <label for="studentId">Student ID</label>
+        <input id="studentId" type="text" placeholder="e.g. s001" />
+      </div>
+      <div class="field">
+        <label for="experiment">Experiment Name</label>
+        <input id="experiment" type="text" placeholder="e.g. coin-experiment" />
+      </div>
+      
+    </div>
+
+    <div class="grid">
+      <div class="tile">
+        <h3>Coin Toss</h3>
+        <button class="btn" data-action="coin1">Toss</button>
+        <div class="result" data-out="coin1">—</div>
+        <div class="msg" data-msg="coin1"></div>
+      </div>
+      <div class="tile">
+        <h3>Double Coin Toss</h3>
+        <button class="btn" data-action="coin2">Toss 2</button>
+        <div class="result" data-out="coin2">—</div>
+        <div class="msg" data-msg="coin2"></div>
+      </div>
+      <div class="tile">
+        <h3>Triple Coin Toss</h3>
+        <button class="btn" data-action="coin3">Toss 3</button>
+        <div class="result" data-out="coin3">—</div>
+        <div class="msg" data-msg="coin3"></div>
+      </div>
+      <div class="tile">
+        <h3>Dice Roll</h3>
+        <button class="btn" data-action="die1">Roll</button>
+        <div class="result" data-out="die1">—</div>
+        <div class="msg" data-msg="die1"></div>
+      </div>
+      <div class="tile">
+        <h3>Double Dice Roll</h3>
+        <button class="btn" data-action="die2">Roll 2</button>
+        <div class="result" data-out="die2">—</div>
+        <div class="msg" data-msg="die2"></div>
+      </div>
+      <div class="tile">
+        <h3>Uniform [0,1]</h3>
+        <button class="btn" data-action="u1">Sample</button>
+        <div class="result" data-out="u1">—</div>
+        <div class="msg" data-msg="u1"></div>
+      </div>
+      <div class="tile">
+        <h3>Uniform in Unit Square</h3>
+        <button class="btn" data-action="u2">Sample (x, y)</button>
+        <div class="result" data-out="u2">—</div>
+        <div class="msg" data-msg="u2"></div>
+      </div>
+      <div class="tile">
+        <h3>Uniform [-1, 1]</h3>
+        <button class="btn" data-action="u1_pm">Sample</button>
+        <div class="result" data-out="u1_pm">—</div>
+        <div class="msg" data-msg="u1_pm"></div>
+      </div>
+      <div class="tile">
+        <h3>Uniform in [-1, 1] Square</h3>
+        <button class="btn" data-action="u2_pm">Sample (x, y)</button>
+        <div class="result" data-out="u2_pm">—</div>
+        <div class="msg" data-msg="u2_pm"></div>
+      </div>
+      <div class="tile">
+        <h3>1D Normal (Gaussian)</h3>
+        <button class="btn" data-action="n1">Sample</button>
+        <div class="result" data-out="n1">—</div>
+        <div class="msg" data-msg="n1"></div>
+      </div>
+      <div class="tile">
+        <h3>2D Normal (Gaussian)</h3>
+        <button class="btn" data-action="n2">Sample (x, y)</button>
+        <div class="result" data-out="n2">—</div>
+        <div class="msg" data-msg="n2"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const sidEl = document.getElementById('studentId');
+    const expEl = document.getElementById('experiment');
+
+    // Restore persisted values
+    sidEl.value = localStorage.getItem('rand.sid') || '';
+    expEl.value = localStorage.getItem('rand.exp') || '';
+    sidEl.addEventListener('input', () => localStorage.setItem('rand.sid', sidEl.value.trim()));
+    expEl.addEventListener('input', () => localStorage.setItem('rand.exp', expEl.value.trim()));
+
+    function baseUrl() {
+      return window.location.origin;
+    }
+
+    // Random helpers
+    function coin() { return Math.random() < 0.5 ? 'H' : 'T'; }
+    function die() { return 1 + Math.floor(Math.random() * 6); }
+    function u01() { return Math.random(); }
+    function u2() { return [Math.random(), Math.random()]; }
+    // Box-Muller transform to get two standard normal random numbers
+    function boxMuller() {
+      let u1 = 0, u2 = 0;
+      //Convert [0,1) to (0,1)
+      while (u1 === 0) u1 = Math.random();
+      while (u2 === 0) u2 = Math.random();
+      const R = Math.sqrt(-2.0 * Math.log(u1));
+      const theta = 2.0 * Math.PI * u2;
+      return [R * Math.cos(theta), R * Math.sin(theta)];
+    }
+    function n1() { return boxMuller()[0]; }
+    function n2() { return boxMuller(); }
+    function nowIso() { return new Date().toISOString(); }
+
+    function out(key) { return document.querySelector(`[data-out="${key}"]`); }
+    function msg(key) { return document.querySelector(`[data-msg="${key}"]`); }
+
+    function ensureRequiredFields() {
+      const sid = sidEl.value.trim();
+      if (!sid) throw new Error('Please enter Student ID');
+      const exp = expEl.value.trim();
+      if (!exp) throw new Error('Please enter Experiment Name');
+      return { sid, exp };
+    }
+
+    async function sendResult(kind, value) {
+      const { sid, exp } = ensureRequiredFields();
+      const payload = { kind, value, ts: nowIso() };
+      const body = { student_id: sid, func_name: 'echo', args: [payload], experiment: exp };
+      const res = await fetch(`${baseUrl()}/call`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+      });
+      if (!res.ok) {
+        let detail = '';
+        try { detail = (await res.json()).detail || ''; } catch {}
+        throw new Error(detail || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      return data.result;
+    }
+
+    async function handle(action) {
+      try {
+        let value;
+        switch(action) {
+          case 'coin1': value = coin(); break;
+          case 'coin2': value = [coin(), coin()]; break;
+          case 'coin3': value = [coin(), coin(), coin()]; break;
+          case 'die1': value = die(); break;
+          case 'die2': value = [die(), die()]; break;
+          case 'u1': value = Number(u01().toFixed(6)); break;
+          case 'u2': {
+            const [x, y] = u2();
+            value = [Number(x.toFixed(6)), Number(y.toFixed(6))];
+            break;
+          }
+          case 'u1_pm':
+            value = Number(u_pm1().toFixed(6));
+            break;
+          case 'u2_pm': {
+            const [x, y] = u_pm2();
+            value = [Number(x.toFixed(6)), Number(y.toFixed(6))];
+            break;
+          }
+          case 'n1':
+            value = Number(n1().toFixed(6));
+            break;
+          case 'n2': {
+            const [x, y] = n2();
+            value = [Number(x.toFixed(6)), Number(y.toFixed(6))];
+            break;
+          }
+          default: return;
+        }
+        out(action).textContent = JSON.stringify(value);
+        msg(action).textContent = 'Sending...';
+        msg(action).className = 'msg';
+        await sendResult(action, value);
+        msg(action).textContent = 'Logged';
+        msg(action).className = 'msg ok';
+      } catch (e) {
+        msg(action).textContent = (e && e.message) ? e.message : String(e);
+        msg(action).className = 'msg err';
+      }
+    }
+
+    document.querySelectorAll('.btn[data-action]').forEach(btn => {
+      btn.addEventListener('click', () => handle(btn.dataset.action));
+    });
+  </script>
+</body>
+</html>
+

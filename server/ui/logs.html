@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Logs</title>
+  <link rel="stylesheet" href="style/main.css" />
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Logs</h1>
+      <span class="subtle">Last 100 entries</span>
+    </header>
+
+    <div class="toolbar">
+      <a href="dashboard.html">← Back</a>
+      <input type="text" id="studentIdFilter" placeholder="Student ID">
+      <input type="text" id="experimentFilter" placeholder="Experiment Name">
+      <button class="btn" id="filterBtn">Filter</button>
+      <button class="btn" id="refreshBtn">Refresh</button>
+      <span class="badge" id="countBadge">Loading…</span>
+      <span class="badge" id="updatedBadge"></span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Student</th>
+            <th>Experiment</th>
+            <th>Function</th>
+            <th>Args</th>
+            <th>Result</th>
+            <th>Error</th>
+          </tr>
+        </thead>
+        <tbody id="logBody"></tbody>
+      </table>
+    </div>
+
+    <div class="footer" id="message"></div>
+  </div>
+
+  <script>
+    const API_BASE_URL = window.location.origin;
+    const logBody = document.getElementById('logBody');
+    const countBadge = document.getElementById('countBadge');
+    const updatedBadge = document.getElementById('updatedBadge');
+    const msg = document.getElementById('message');
+    const studentIdFilter = document.getElementById('studentIdFilter');
+    const experimentFilter = document.getElementById('experimentFilter');
+
+    function setMsg(text) { msg.textContent = text || ''; }
+
+    function escapeHTML(str) {
+      return (str ?? '').toString().replace(/[&<>"]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[s]));
+    }
+
+    async function fetchLogs(studentId, experimentName) {
+      try {
+        const params = new URLSearchParams({ n: 100, order: 'latest' });
+        if (studentId) params.set('student_id', studentId);
+        if (experimentName) params.set('experiment_name', experimentName);
+        const res = await fetch(`${API_BASE_URL}/admin/logs?${params.toString()}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        return data.logs || [];
+      } catch (e) {
+        console.error('Fetch logs failed', e);
+        setMsg('Failed to fetch logs. Is the server running?');
+        return [];
+      }
+    }
+
+    function renderLogs(logs) {
+      logBody.innerHTML = '';
+      if (!logs.length) {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = 7;
+        td.textContent = 'No logs available.';
+        tr.appendChild(td);
+        logBody.appendChild(tr);
+        return;
+      }
+
+      for (const row of logs) {
+        const tr = document.createElement('tr');
+        const tds = [
+          new Date(row.ts).toLocaleString(),
+          row.student_id || '',
+          row.experiment_name || '',
+          row.func_name || '',
+          row.args_json || '',
+          row.result_json || '',
+          row.error || ''
+        ];
+
+        tds.forEach((val, i) => {
+          const td = document.createElement('td');
+          td.className = i <= 3 ? 'min' : 'code';
+          td.textContent = typeof val === 'string' ? val : String(val);
+          tr.appendChild(td);
+        });
+
+        logBody.appendChild(tr);
+      }
+    }
+
+    async function refresh() {
+      setMsg('');
+      countBadge.textContent = 'Loading…';
+      const studentId = studentIdFilter.value.trim();
+      const experimentName = experimentFilter.value.trim();
+      const logs = await fetchLogs(studentId, experimentName);
+      renderLogs(logs);
+      countBadge.textContent = `${logs.length} logs`;
+      updatedBadge.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+    }
+
+    document.getElementById('filterBtn').addEventListener('click', refresh);
+    document.getElementById('refreshBtn').addEventListener('click', () => {
+        studentIdFilter.value = '';
+        experimentFilter.value = '';
+        refresh();
+    });
+    document.addEventListener('DOMContentLoaded', refresh);
+  </script>
+</body>
+</html>

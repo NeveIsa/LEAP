@@ -10,13 +10,21 @@ from typing import Optional, List, Dict, Any
 import os
 import datetime
 
+import logging
+
+# Configure logging to a file
+logging.basicConfig(filename='sql_debug.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.info("Logging configured and storage_orm.py imported.")
+
 from sqlalchemy import create_engine, String, Integer, DateTime, Text, select, Sequence, asc, desc, delete
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 # ---------------------------------------------------------------------
 # Engine & Session
 # ---------------------------------------------------------------------
-DB_FILE = os.environ.get("RPC_DB_FILE", "students.db")
+_current_dir = os.path.dirname(os.path.abspath(__file__))
+_project_root = os.path.dirname(_current_dir)
+DB_FILE = os.environ.get("RPC_DB_FILE", os.path.join(_project_root, "db/students.db"))
 engine = create_engine(f"duckdb:///{DB_FILE}", future=True)
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, future=True)
 
@@ -39,6 +47,7 @@ class Log(Base):
     id: Mapped[int] = mapped_column(Integer, log_id_seq, primary_key=True, server_default=log_id_seq.next_value())
     ts: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow, index=True, nullable=False)
     student_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    experiment_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     func_name: Mapped[str] = mapped_column(String, index=True, nullable=False)
     args_json: Mapped[str] = mapped_column(Text, nullable=False)
     result_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -48,8 +57,18 @@ class Log(Base):
 # API
 # ---------------------------------------------------------------------
 def init_db() -> None:
-    """Create tables if missing."""
+    """Create tables if missing and apply basic migrations."""
     Base.metadata.create_all(engine)
+    # Basic migration: add experiment_name to logs if missing
+    try:
+        with engine.connect() as conn:
+            cols = conn.exec_driver_sql("PRAGMA table_info('logs')").fetchall()
+            names = {row[1] for row in cols} if cols else set()
+            if 'experiment_name' not in names:
+                conn.exec_driver_sql("ALTER TABLE logs ADD COLUMN experiment_name VARCHAR NULL")
+    except Exception:
+        # Best-effort migration; ignore if PRAGMA not supported or other errors
+        pass
 
 def add_student(student_id: str, name: str, email: Optional[str] = None) -> None:
     """Idempotent insert of a student."""
@@ -86,42 +105,50 @@ def delete_student(student_id: str) -> bool:
         return False
 
 
-def log_event(*, student_id: str, func_name: str, args_json: str, result_json: Optional[str], error: Optional[str]) -> None:
+def log_event(*, student_id: str, experiment_name: Optional[str], func_name: str, args_json: str, result_json: Optional[str], error: Optional[str]) -> None:
     with SessionLocal() as s:
-        s.add(Log(student_id=student_id, func_name=func_name, args_json=args_json, result_json=result_json, error=error))
-        s.commit()
+        s.add(Log(student_id=student_id, experiment_name=experiment_name, func_name=func_name, args_json=args_json, result_json=result_json, error=error))
+        try:
+            s.commit()
+        except Exception as e:
+            # If the DB is missing the experiment_name column (older schema), try to migrate on the fly once
+            msg = str(e).lower()
+            s.rollback()
+            if "experiment_name" in msg and "does not have a column" in msg:
+                try:
+                    init_db()
+                    s.add(Log(student_id=student_id, experiment_name=experiment_name, func_name=func_name, args_json=args_json, result_json=result_json, error=error))
+                    s.commit()
+                    return
+                except Exception:
+                    s.rollback()
+            # Re-raise original error if migration or retry didn't work
+            raise
 
-def fetch_logs(limit: int = 100, order: str = "desc") -> List[Dict[str, Any]]:
-    """Fetches logs, allowing for ordering."""
+def fetch_logs(student_id: Optional[str] = None, experiment_name: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Fetches logs, allowing for filtering."""
     with SessionLocal() as s:
-        sort_order = desc(Log.ts) if order == "desc" else asc(Log.ts)
-        rows = s.execute(select(Log).order_by(sort_order).limit(limit)).scalars().all()
+        stmt = select(Log)
+        
+        conditions = []
+        if student_id:
+            conditions.append(Log.student_id == student_id)
+        if experiment_name:
+            conditions.append(Log.experiment_name == experiment_name)
+        
+        if conditions:
+            stmt = stmt.where(and_(*conditions))
+        
+        # Compile the statement to get the raw SQL string
+        compiled_stmt = stmt.compile(dialect=sqlite.dialect(), compile_kwargs={"literal_binds": True})
+        logging.info(f"Generated SQL statement: {compiled_stmt}")
+        
+        rows = s.execute(stmt).scalars().all() # Removed order_by and limit
         return [
             {
                 "ts": r.ts.isoformat(),
                 "student_id": r.student_id,
-                "func_name": r.func_name,
-                "args_json": r.args_json,
-                "result_json": r.result_json,
-                "error": r.error,
-            }
-            for r in rows
-        ]
-
-def fetch_logs_for_student(student_id: str, limit: int = 100, order: str = "desc") -> List[Dict[str, Any]]:
-    """Fetches logs for a specific student, allowing for ordering."""
-    with SessionLocal() as s:
-        sort_order = desc(Log.ts) if order == "desc" else asc(Log.ts)
-        rows = s.execute(
-            select(Log)
-            .where(Log.student_id == student_id)
-            .order_by(sort_order)
-            .limit(limit)
-        ).scalars().all()
-        return [
-            {
-                "ts": r.ts.isoformat(),
-                "student_id": r.student_id,
+                "experiment_name": r.experiment_name,
                 "func_name": r.func_name,
                 "args_json": r.args_json,
                 "result_json": r.result_json,
