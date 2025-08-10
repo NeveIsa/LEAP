@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style/main.css" />
+</head>
+<body>
+
+    <div id="notification-container"></div> <!-- New notification container -->
+
+    <div class="container">
+
+        <main>
+            <!-- Bulk Upload (collapsed by default) -->
+            <details class="collapsible">
+                <summary class="collapsible-summary">Bulk Upload (CSV)</summary>
+                <div class="content-section">
+                    <p class="text-muted mb-12">
+                        Upload a CSV with headers: <code>sid</code>, <code>name</code> and optional <code>email</code>.
+                    </p>
+                    <div class="form-row ai-center gap-10">
+                        <input type="file" id="csv-file" accept=".csv,text/csv" class="text-light" />
+                        <button type="button" id="csv-parse-btn" class="btn" disabled>Preview</button>
+                        <button type="button" id="csv-upload-btn" class="btn" disabled>Register</button>
+                    </div>
+                    <div id="csv-summary" class="mt-12 text-sm text-muted"></div>
+                    <div id="csv-errors" class="mt-8 text-xs text-error"></div>
+                </div>
+            </details>
+
+            <!-- Add New Student (collapsed by default) -->
+            <details class="collapsible">
+                <summary class="collapsible-summary">Add New Student</summary>
+                <div class="content-section">
+                    <form id="add-student-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="student-id">Student ID</label>
+                            <input type="text" id="student-id" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="name">Name (Required)</label>
+                            <input type="text" id="name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="email">Email (Optional)</label>
+                            <input type="email" id="email">
+                        </div>
+                        <button type="submit" class="btn">Add Student</button>
+                    </div>
+                    </form>
+                </div>
+            </details>
+
+            <!-- Student List -->
+            <div class="content-section">
+                <h2>Student List</h2>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Student ID</th>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="student-table-body">
+                            <!-- Student data will be populated here by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const API_BASE_URL = window.location.origin;
+        const studentTableBody = document.getElementById('student-table-body');
+        const addStudentForm = document.getElementById('add-student-form');
+        const notificationContainer = document.getElementById('notification-container'); // Updated reference
+        // Bulk upload elements
+        const csvFileInput = document.getElementById('csv-file');
+        const csvParseBtn = document.getElementById('csv-parse-btn');
+        const csvUploadBtn = document.getElementById('csv-upload-btn');
+        const csvSummary = document.getElementById('csv-summary');
+        const csvErrors = document.getElementById('csv-errors');
+
+        const fetchStudents = async () => {
+            try {
+                const response = await fetch(`${API_BASE_URL}/admin/students`);
+                if (response.status === 401) {
+                    window.location.href = 'login.html';
+                    return;
+                }
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                
+                studentTableBody.innerHTML = ''; // Clear existing table data
+
+                if (data.students && data.students.length > 0) {
+                    data.students.forEach(student => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${student.student_id}</td>
+                            <td>${student.name}</td>
+                            <td>${student.email || 'N/A'}</td>
+                            <td>
+                                <button class="btn-delete" data-id="${student.student_id}">Delete</button>
+                            </td>
+                        `;
+                        studentTableBody.appendChild(row);
+                    });
+                } else {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `<td colspan="4" style="text-align:center;">No students found.</td>`;
+                    studentTableBody.appendChild(row);
+                }
+            } catch (error) {
+                console.error('Error fetching students:', error);
+                showMessage('Failed to fetch students. Is the server running?', 'error');
+            }
+        };
+
+        // Helper: fetch existing students (Set of IDs)
+        const fetchExistingStudents = async () => {
+            const response = await fetch(`${API_BASE_URL}/admin/students`);
+            if (response.status === 401) {
+                window.location.href = 'login.html';
+                return null;
+            }
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            const data = await response.json();
+            const set = new Set();
+            (data.students || []).forEach(s => s?.student_id && set.add(String(s.student_id)));
+            return set;
+        };
+
+        const addStudent = async (event) => {
+            event.preventDefault();
+            const studentId = document.getElementById('student-id').value.trim();
+            const name = document.getElementById('name').value.trim();
+            const email = document.getElementById('email').value.trim();
+
+            if (!studentId || !name) {
+                showMessage('Student ID and Name are required.', 'error');
+                return;
+            }
+
+            const studentData = {
+                student_id: studentId,
+                name: name,
+            };
+
+            if (email) {
+                studentData.email = email;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/admin/add-student`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(studentData),
+                });
+
+                if (response.status === 401) {
+                    window.location.href = 'login.html';
+                    return;
+                }
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ detail: 'An unknown error occurred.' }));
+                    throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+                }
+
+                showMessage('Student added successfully!', 'success');
+                addStudentForm.reset();
+                fetchStudents(); // Refresh the list
+            } catch (error) {
+                console.error('Error adding student:', error);
+                showMessage(`Error: ${error.message}`, 'error');
+            }
+        };
+
+        // --- CSV Upload Logic ---
+        const MAX_CSV_ROWS = 5000;
+
+        function showCsvError(msg) {
+            csvErrors.textContent = msg;
+        }
+
+        function clearCsvMessages() {
+            csvSummary.textContent = '';
+            csvErrors.textContent = '';
+        }
+
+        function enableCsvButtons(parseEnabled, uploadEnabled) {
+            csvParseBtn.disabled = !parseEnabled;
+            csvUploadBtn.disabled = !uploadEnabled;
+        }
+
+        // Simple robust CSV parser handling quotes, commas, and newlines inside quotes
+        function parseCSV(text) {
+            const rows = [];
+            let cur = [];
+            let field = '';
+            let i = 0;
+            let inQuotes = false;
+            const pushField = () => { cur.push(field); field = ''; };
+            const pushRow = () => { rows.push(cur); cur = []; };
+            while (i < text.length) {
+                const ch = text[i];
+                if (inQuotes) {
+                    if (ch === '"') {
+                        if (text[i+1] === '"') { field += '"'; i += 2; continue; }
+                        inQuotes = false; i++; continue;
+                    } else { field += ch; i++; continue; }
+                } else {
+                    if (ch === '"') { inQuotes = true; i++; continue; }
+                    if (ch === ',') { pushField(); i++; continue; }
+                    if (ch === '\n') { pushField(); pushRow(); i++; continue; }
+                    if (ch === '\r') { // handle CRLF and lone CR
+                        if (text[i+1] === '\n') { i++; }
+                        pushField(); pushRow(); i++; continue;
+                    }
+                    field += ch; i++; continue;
+                }
+            }
+            // push last field/row if any content
+            pushField();
+            // Only push row if it has at least one non-empty cell or there were columns
+            if (cur.length > 1 || (cur.length === 1 && cur[0].trim() !== '')) rows.push(cur);
+            return rows;
+        }
+
+        function stripBOM(s) {
+            return s.charCodeAt(0) === 0xFEFF ? s.slice(1) : s;
+        }
+
+        let parsedUpload = null; // cache between preview and upload
+
+        async function handleCsvParse() {
+            clearCsvMessages();
+            parsedUpload = null;
+            const file = csvFileInput.files && csvFileInput.files[0];
+            if (!file) { showCsvError('Please choose a CSV file.'); enableCsvButtons(true, false); return; }
+
+            if (file.size > 5 * 1024 * 1024) { // 5MB safety
+                showCsvError('File too large (limit 5MB).');
+                enableCsvButtons(true, false);
+                return;
+            }
+
+            const text = await file.text();
+            const rows = parseCSV(stripBOM(text));
+            if (!rows.length) { showCsvError('Empty CSV.'); enableCsvButtons(true, false); return; }
+
+            // Normalize headers
+            const headers = rows[0].map(h => String(h || '').trim().toLowerCase());
+            const idxSid = headers.indexOf('sid');
+            const idxName = headers.indexOf('name');
+            const idxEmail = headers.indexOf('email');
+            if (idxSid === -1 || idxName === -1) {
+                showCsvError('Missing required headers: sid and name');
+                enableCsvButtons(true, false);
+                return;
+            }
+
+            const bodyRows = rows.slice(1);
+            if (bodyRows.length > MAX_CSV_ROWS) {
+                showCsvError(`Too many rows (${bodyRows.length}). Limit is ${MAX_CSV_ROWS}.`);
+                enableCsvButtons(true, false);
+                return;
+            }
+
+            const issues = [];
+            const withinFile = new Set();
+            const cleaned = [];
+            for (let r = 0; r < bodyRows.length; r++) {
+                const cols = bodyRows[r];
+                if (!cols || cols.every(c => String(c||'').trim() === '')) continue; // skip blank row
+                const sid = String((cols[idxSid] ?? '')).trim();
+                const name = String((cols[idxName] ?? '')).trim();
+                const email = idxEmail !== -1 ? String((cols[idxEmail] ?? '')).trim() : '';
+                if (!sid) { issues.push(`Row ${r+2}: Missing sid`); continue; }
+                if (!name) { issues.push(`Row ${r+2}: Missing name`); continue; }
+                if (withinFile.has(sid)) { issues.push(`Row ${r+2}: Duplicate sid within file (${sid})`); continue; }
+                withinFile.add(sid);
+                cleaned.push({ student_id: sid, name, email: email || undefined });
+            }
+
+            let existingSet = await fetchExistingStudents();
+            if (existingSet === null) return; // redirected to login
+            const toAdd = [];
+            const skippedExisting = [];
+            cleaned.forEach(s => {
+                if (existingSet.has(s.student_id)) skippedExisting.push(s.student_id); else toAdd.push(s);
+            });
+
+            const summary = [
+                `Rows read: ${bodyRows.length}`,
+                `Valid in file: ${cleaned.length}`,
+                `Existing skipped: ${skippedExisting.length}`,
+                `To register: ${toAdd.length}`,
+            ].join(' | ');
+            csvSummary.textContent = summary;
+            if (issues.length) {
+                csvErrors.innerHTML = issues.slice(0, 50).map(e => `• ${e}`).join('<br>') + (issues.length > 50 ? `<br>...and ${issues.length-50} more.` : '');
+            }
+
+            parsedUpload = { toAdd };
+            enableCsvButtons(true, toAdd.length > 0);
+        }
+
+        async function handleCsvUpload() {
+            if (!parsedUpload || !parsedUpload.toAdd?.length) { showCsvError('No valid rows to upload.'); return; }
+            csvErrors.textContent = '';
+            csvUploadBtn.disabled = true;
+            csvParseBtn.disabled = true;
+            let success = 0, failed = 0;
+            // Display live progress
+            const total = parsedUpload.toAdd.length;
+            const updateProgress = () => {
+                csvSummary.textContent = `Registering ${success+failed}/${total}... Success: ${success}, Failed: ${failed}`;
+            };
+            updateProgress();
+
+            for (const s of parsedUpload.toAdd) {
+                try {
+                    const resp = await fetch(`${API_BASE_URL}/admin/add-student`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(s),
+                    });
+                    if (resp.status === 401) { window.location.href = 'login.html'; return; }
+                    if (!resp.ok) { failed++; } else { success++; }
+                } catch (e) {
+                    failed++;
+                }
+                updateProgress();
+            }
+
+            csvSummary.textContent = `Completed. Success: ${success}, Failed: ${failed}`;
+            if (failed > 0) {
+                showMessage('Some rows failed to register. Check CSV and try again.', 'error');
+            } else {
+                showMessage('All students registered successfully!', 'success');
+            }
+            parsedUpload = null;
+            csvUploadBtn.disabled = true;
+            csvParseBtn.disabled = false;
+            csvFileInput.value = '';
+            // Refresh table
+            fetchStudents();
+        }
+
+        // Wire up CSV UI
+        csvFileInput.addEventListener('change', () => {
+            clearCsvMessages();
+            enableCsvButtons(!!csvFileInput.files.length, false);
+        });
+        csvParseBtn.addEventListener('click', handleCsvParse);
+        csvUploadBtn.addEventListener('click', handleCsvUpload);
+        
+        const deleteStudent = async (studentId) => {
+            if (!confirm(`Are you sure you want to delete student ${studentId}? This action cannot be undone.`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/admin/student/${studentId}`, {
+                    method: 'DELETE',
+                });
+
+                if (response.status === 401) {
+                    window.location.href = 'login.html';
+                    return;
+                }
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ detail: 'An unknown error occurred.' }));
+                    throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+                }
+
+                showMessage('Student deleted successfully!', 'warning'); // Changed to 'warning'
+                fetchStudents(); // Refresh the list
+            } catch (error) {
+                console.error('Error deleting student:', error);
+                showMessage(`Error: ${error.message}`, 'error');
+            }
+        };
+
+        const showMessage = (message, type) => {
+            const msgElement = document.createElement('div');
+            msgElement.classList.add('notification-message', type);
+            msgElement.textContent = message; // Use textContent for security
+
+            notificationContainer.appendChild(msgElement);
+
+            // Fade out and remove after 4 seconds
+            setTimeout(() => {
+                msgElement.style.opacity = '0'; // Start fade out
+                setTimeout(() => {
+                    msgElement.remove(); // Remove from DOM after fade
+                }, 300); // Match CSS transition duration
+            }, 4000);
+        };
+
+        // --- Event Listeners ---
+
+        document.addEventListener('DOMContentLoaded', fetchStudents);
+
+        addStudentForm.addEventListener('submit', addStudent);
+
+        studentTableBody.addEventListener('click', (event) => {
+            if (event.target.classList.contains('btn-delete')) {
+                const studentId = event.target.dataset.id;
+                deleteStudent(studentId);
+            }
+        });
+
+    </script>
+
+</body>
+</html>

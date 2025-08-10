@@ -18,3 +18,8 @@ def rosenbrock(x: float, y: float, a: float = 1.0, b: float = 100.0) -> float:
 def quadratic(a: float, b: float, c: float, x: float) -> float:
     """Evaluate a*x^2 + b*x + c at x."""
     return a * x * x + b * x + c
+
+# Utility function(s) for logging arbitrary values from UI
+def echo(value):
+    """Return the input value unchanged. Useful for logging arbitrary payloads via /call."""
+    return value

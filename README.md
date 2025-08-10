@@ -43,11 +43,24 @@ The server is now running and listening on port 9000.
 
 ### 3. Register a Student
 
-Before a student can use the system, they must be registered. You can add a student using a simple `curl` command.
+Admin endpoints require a login session. Use the web UI or login via curl and reuse the session cookie.
+
+- Option A: Use the UI
+  1) Open `http://localhost:9000/ui/login.html` and login (default: `admin` / `password`).
+  2) Go to the Dashboard → Student Management to add a student.
+
+- Option B: Use curl with cookies
 
 ```bash
-# Register a student with the ID "s001"
-curl -X POST -H "Content-Type: application/json" -d '{"student_id": "s001"}' http://localhost:9000/admin/add-student
+# 1) Login and save session cookie
+curl -sS -c cookies.txt -X POST -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"password"}' \
+  http://localhost:9000/admin/login
+
+# 2) Add a student (name required, email optional)
+curl -sS -b cookies.txt -X POST -H "Content-Type: application/json" \
+  -d '{"student_id":"s001","name":"Alice","email":"alice@example.com"}' \
+  http://localhost:9000/admin/add-student
 ```
 
 ### 4. Run the Client
@@ -60,14 +73,9 @@ python client/client.py
 
 ### 5. View the Dashboard
 
-The project includes a `demo.py` Marimo notebook that serves as the starting point for a dashboard. To run it:
-
-```bash
-cd server
-marimo edit demo.py
-```
-
-This will open a new tab in your browser with the interactive dashboard.
+- Admin UI: open `http://localhost:9000/ui/login.html`, then use the Dashboard to access Student Management and Log Visualization.
+- Log Visualization: `ui/viz/lineplot.html` renders the last 100 logs using uPlot. Series are colored by student. It uses the public endpoint `GET /logs`.
+- Optional Marimo demo: there is a stub at `server/demo.py` you can open with `marimo edit server/demo.py`. If you use it, ensure it connects to the correct DB path (`db/students.db`).
 
 ## How It Works
 
@@ -89,21 +97,29 @@ def cubic(x: float) -> float:
 
 Students can use the `client/client.py` script as a template. They need to:
 1.  Set their `STUDENT_ID` at the top of the script.
-2.  Use the `client` object to call any of the functions provided by the instructor.
-3.  The `client.help()` method can be used to list all available functions and their signatures.
+2.  Optionally set an `EXPERIMENT` name to tag their calls (e.g., "bisection-demo").
+3.  Use the `client` object to call any of the functions provided by the instructor.
+4.  The `client.help()` method can be used to list all available functions and their signatures.
 
 ```python
 # in client/client.py
 
 SERVER_URL = "http://localhost:9000"
 STUDENT_ID = "s001" # Change to your assigned ID
+EXPERIMENT = "bisection-demo"  # Optional experiment label
 
-client = RPCClient(server_url=SERVER_URL, student_id=STUDENT_ID)
+client = RPCClient(server_url=SERVER_URL, student_id=STUDENT_ID, experiment_name=EXPERIMENT)
 
 # Get a list of available functions
 client.help()
 
-# Call a function
-result = client.square(7)
-print(f"Result: {result}")
+# Call a function (raises on error). Each call is logged with student_id and experiment.
+try:
+    result = client.square(7)
+    print(f"Result: {result}")
+except Exception as e:
+    print(f"RPC error: {e}")
+```
+
+The client raises exceptions on failures (network/server/protocol) using `RPCError` subtypes. Logs now include `student_id` and `experiment_name` for each call.
 ```
