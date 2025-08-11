@@ -7,3 +7,51 @@ FROM logs
 2025-08-10 02:46:37,040 - INFO - Logging configured and storage_orm.py imported.
 2025-08-10 02:47:25,312 - INFO - Logging configured and storage_orm.py imported.
 2025-08-10 02:48:22,058 - INFO - Logging configured and storage_orm.py imported.
+2025-08-10 10:27:13,312 - INFO - Logging configured and storage_orm.py imported.
+2025-08-10 10:28:17,773 - INFO - Logging configured and storage_orm.py imported.
+2025-08-10 16:16:57,575 - INFO - Logging configured and storage_orm.py imported.
+2025-08-10 16:19:51,967 - INFO - Logging configured and storage_orm.py imported.
+2025-08-10 16:20:00,796 - INFO - Generated SQL statement: SELECT logs.id, logs.ts, logs.student_id, logs.experiment_name, logs.func_name, logs.args_json, logs.result_json, logs.error 
+FROM logs
+2025-08-10 16:20:06,043 - INFO - Generated SQL statement: SELECT logs.id, logs.ts, logs.student_id, logs.experiment_name, logs.func_name, logs.args_json, logs.result_json, logs.error 
+FROM logs
+2025-08-10 16:20:13,254 - INFO - Generated SQL statement: SELECT logs.id, logs.ts, logs.student_id, logs.experiment_name, logs.func_name, logs.args_json, logs.result_json, logs.error 
+FROM logs
+2025-08-10 16:20:22,676 - INFO - Generated SQL statement: SELECT logs.id, logs.ts, logs.student_id, logs.experiment_name, logs.func_name, logs.args_json, logs.result_json, logs.error 
+FROM logs
+2025-08-10 16:20:27,753 - INFO - Generated SQL statement: SELECT logs.id, logs.ts, logs.student_id, logs.experiment_name, logs.func_name, logs.args_json, logs.result_json, logs.error 
+FROM logs
+2025-08-10 16:20:30,034 - INFO - Generated SQL statement: SELECT logs.id, logs.ts, logs.student_id, logs.experiment_name, logs.func_name, logs.args_json, logs.result_json, logs.error 
+FROM logs
+2025-08-10 16:20:39,525 - INFO - Generated SQL statement: SELECT logs.id, logs.ts, logs.student_id, logs.experiment_name, logs.func_name, logs.args_json, logs.result_json, logs.error 
+FROM logs 
+WHERE logs.experiment_name = 'ok'
+2025-08-10 16:20:52,149 - INFO - Generated SQL statement: SELECT logs.id, logs.ts, logs.student_id, logs.experiment_name, logs.func_name, logs.args_json, logs.result_json, logs.error 
+FROM logs 
+WHERE logs.experiment_name = 'bisection_method'
+2025-08-10 16:20:53,533 - INFO - Generated SQL statement: SELECT logs.id, logs.ts, logs.student_id, logs.experiment_name, logs.func_name, logs.args_json, logs.result_json, logs.error 
+FROM logs 
+WHERE logs.experiment_name = 'bisection_method'
+2025-08-10 16:20:53,952 - INFO - Generated SQL statement: SELECT logs.id, logs.ts, logs.student_id, logs.experiment_name, logs.func_name, logs.args_json, logs.result_json, logs.error 
+FROM logs 
+WHERE logs.experiment_name = 'bisection_method'
+2025-08-10 16:20:54,335 - INFO - Generated SQL statement: SELECT logs.id, logs.ts, logs.student_id, logs.experiment_name, logs.func_name, logs.args_json, logs.result_json, logs.error 
+FROM logs 
+WHERE logs.experiment_name = 'bisection_method'
+2025-08-10 16:21:00,524 - INFO - Generated SQL statement: SELECT logs.id, logs.ts, logs.student_id, logs.experiment_name, logs.func_name, logs.args_json, logs.result_json, logs.error 
+FROM logs
+2025-08-10 16:21:01,339 - INFO - Generated SQL statement: SELECT logs.id, logs.ts, logs.student_id, logs.experiment_name, logs.func_name, logs.args_json, logs.result_json, logs.error 
+FROM logs
+2025-08-10 16:21:25,463 - INFO - Generated SQL statement: SELECT logs.id, logs.ts, logs.student_id, logs.experiment_name, logs.func_name, logs.args_json, logs.result_json, logs.error 
+FROM logs 
+WHERE logs.experiment_name = 'bisection-demo'
+2025-08-10 16:21:33,385 - INFO - Generated SQL statement: SELECT logs.id, logs.ts, logs.student_id, logs.experiment_name, logs.func_name, logs.args_json, logs.result_json, logs.error 
+FROM logs 
+WHERE logs.student_id = 's001' AND logs.experiment_name = 'bisection-demo'
+2025-08-10 16:21:56,245 - INFO - Generated SQL statement: SELECT logs.id, logs.ts, logs.student_id, logs.experiment_name, logs.func_name, logs.args_json, logs.result_json, logs.error 
+FROM logs
+2025-08-10 16:22:03,395 - INFO - Generated SQL statement: SELECT logs.id, logs.ts, logs.student_id, logs.experiment_name, logs.func_name, logs.args_json, logs.result_json, logs.error 
+FROM logs 
+WHERE logs.student_id = 's002'
+2025-08-10 17:31:39,325 - INFO - Logging configured and storage_orm.py imported.
+2025-08-10 17:36:08,650 - INFO - Logging configured and storage_orm.py imported.

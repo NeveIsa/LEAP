@@ -122,6 +122,9 @@
     function die() { return 1 + Math.floor(Math.random() * 6); }
     function u01() { return Math.random(); }
     function u2() { return [Math.random(), Math.random()]; }
+    // Uniforms over [-1, 1]
+    function u_pm1() { return 2 * Math.random() - 1; }
+    function u_pm2() { return [2 * Math.random() - 1, 2 * Math.random() - 1]; }
     // Box-Muller transform to get two standard normal random numbers
     function boxMuller() {
       let u1 = 0, u2 = 0;
@@ -214,4 +217,3 @@
   </script>
 </body>
 </html>
-

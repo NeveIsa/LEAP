@@ -30,18 +30,41 @@ First, install the required Python packages:
 pip install -r req.txt
 ```
 
-### 2. Run the Server
+### 2. Configure Admin Credentials (optional)
 
-Navigate to the `server` directory and start the FastAPI server with Uvicorn.
+Admin login credentials are read from a JSON file by default: `server/admin_credentials.json`.
+
+File format:
+
+```
+{
+  "username": "admin",
+  "password": "password"
+}
+```
+
+You can override the file location with `ADMIN_CREDENTIALS_FILE` or use environment variables `ADMIN_USERNAME` and `ADMIN_PASSWORD` to take precedence over the file.
+
+Example:
+
+```
+export ADMIN_USERNAME=admin
+export ADMIN_PASSWORD=change-me
+```
+
+### 3. Run the Server
+
+Start the FastAPI server from the repository root (recommended):
 
 ```bash
-cd server
-uvicorn rpc_server:app --host 0.0.0.0 --port 9000
+uvicorn server.rpc_server:app --host 0.0.0.0 --port 9000
 ```
+
+The server loads instructor functions from `./funcs` by default. You can override this with `FUNCTIONS_DIR=/path/to/dir`.
 
 The server is now running and listening on port 9000.
 
-### 3. Register a Student
+### 4. Register a Student
 
 Admin endpoints require a login session. Use the web UI or login via curl and reuse the session cookie.
 
@@ -63,7 +86,7 @@ curl -sS -b cookies.txt -X POST -H "Content-Type: application/json" \
   http://localhost:9000/admin/add-student
 ```
 
-### 4. Run the Client
+### 5. Run the Client
 
 The `client/client.py` file contains an example of how a student would interact with the server. It lists available functions and calls a few for demonstration.
 
@@ -71,7 +94,7 @@ The `client/client.py` file contains an example of how a student would interact 
 python client/client.py
 ```
 
-### 5. View the Dashboard
+### 6. View the Dashboard
 
 - Admin UI: open `http://localhost:9000/ui/login.html`, then use the Dashboard to access Student Management and Log Visualization.
 - Log Visualization: `ui/viz/lineplot.html` renders the last 100 logs using uPlot. Series are colored by student. It uses the public endpoint `GET /logs`.
@@ -81,12 +104,12 @@ python client/client.py
 
 ### For Instructors: Adding New Functions
 
-To add a new function for students to use, simply define it in the `server/functions.py` file. Any standard Python function that does not start with an underscore `_` will be automatically loaded by the server on startup and exposed to the clients.
+Place Python files with public functions in the repository-level `funcs/` folder (default). Any function that does not start with an underscore `_` is automatically loaded by the server on startup and exposed to clients. You can change the folder with the `FUNCTIONS_DIR` environment variable.
 
-**Example:** Adding a simple cubic function to `server/functions.py`.
+**Example:** Adding a simple cubic function to `funcs/functions.py`.
 
 ```python
-# in server/functions.py
+# in funcs/functions.py
 
 def cubic(x: float) -> float:
     """Return x^3."""

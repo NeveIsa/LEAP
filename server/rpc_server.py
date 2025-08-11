@@ -20,7 +20,9 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import storage_orm as storage
 
 _current_dir = os.path.dirname(os.path.abspath(__file__))
-FUNCTIONS_DIR = os.path.join(_current_dir, "funcs")
+# Resolve repo root and default functions dir at project root
+_project_root = os.path.dirname(_current_dir)
+FUNCTIONS_DIR = os.environ.get("FUNCTIONS_DIR", os.path.join(_project_root, "funcs"))
 storage.init_db()
 
 FUNCTION_REGISTRY: Dict[str, Callable[..., Any]] = {}
@@ -74,8 +76,10 @@ app.mount("/ui", StaticFiles(directory=os.path.join(_current_dir, "ui")), name="
 
 @app.get("/")
 async def root_redirect(request: Request):
-    # Public landing goes to dashboard; admin login is available at /ui/login.html
-    return RedirectResponse(url="/ui/dashboard.html")
+    # Auth landing: dashboard if logged in, else login page
+    if request.session.get("authenticated"):
+        return RedirectResponse(url="/ui/dashboard.html")
+    return RedirectResponse(url="/ui/login.html")
 
 # --- Public registration check ---
 @app.get("/is-registered")
@@ -93,12 +97,47 @@ def is_registered(student_id: str = Query(..., description="Student ID to check"
 
 # --- Session Middleware ---
 SESSION_SECRET_KEY = os.environ.get("SESSION_SECRET_KEY", "super-secret-key-please-change-me-in-prod")
-app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET_KEY)
+# Session cookie expires when browser closes (no Max-Age/Expires)
+app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET_KEY, max_age=None)
 # --------------------------
 
 # --- Admin Authentication ---
-ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "password") # IMPORTANT: Change this in production!
+def _load_admin_credentials() -> tuple[str, str]:
+    """Load admin credentials from env or JSON file.
+
+    Priority:
+    1) Environment variables: ADMIN_USERNAME, ADMIN_PASSWORD
+    2) JSON credentials file at path ADMIN_CREDENTIALS_FILE or ./admin_credentials.json
+    3) Fallback defaults (admin / password)
+    """
+    # 1) Env vars override all
+    env_user = os.environ.get("ADMIN_USERNAME")
+    env_pass = os.environ.get("ADMIN_PASSWORD")
+    if env_user and env_pass:
+        return env_user, env_pass
+
+    # 2) JSON credentials file
+    cred_path = os.environ.get(
+        "ADMIN_CREDENTIALS_FILE",
+        os.path.join(_current_dir, "admin_credentials.json"),
+    )
+    try:
+        if os.path.isfile(cred_path):
+            with open(cred_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                username = data.get("username") or data.get("user")
+                password = data.get("password") or data.get("pass")
+                if username and password:
+                    return username, password
+    except Exception:
+        # Ignore file errors and fall back
+        pass
+
+    # 3) Fallback defaults
+    return ("admin", "password")
+
+ADMIN_USERNAME, ADMIN_PASSWORD = _load_admin_credentials()
 
 class LoginRequest(BaseModel):
     username: str
@@ -116,6 +155,18 @@ def is_admin_authenticated(request: Request):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     return True
 # ----------------------------
+
+@app.post("/admin/logout")
+async def logout(request: Request, response: Response):
+    """Clear session and remove cookie to log out admin."""
+    request.session.clear()
+    response.delete_cookie("session")
+    return {"message": "Logged out"}
+
+@app.get("/admin/ping")
+async def admin_ping(authenticated: bool = Depends(is_admin_authenticated)):
+    """Quick auth check; returns 401 if not authenticated."""
+    return {"ok": True}
 
 @app.get("/functions")
 def list_functions():
@@ -215,7 +266,7 @@ def get_logs(
     """Public endpoint: Returns logs, optionally filtered by student, with ordering."""
     try:
         logs = storage.fetch_logs(student_id=student_id, experiment_name=experiment_name)
-        return {"logs": []}
+        return {"logs": logs}
     except Exception:
         # If the table doesn't exist yet or DB not initialized, return empty
         return {"logs": []}

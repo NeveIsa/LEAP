@@ -16,7 +16,8 @@ import logging
 logging.basicConfig(filename='sql_debug.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logging.info("Logging configured and storage_orm.py imported.")
 
-from sqlalchemy import create_engine, String, Integer, DateTime, Text, select, Sequence, asc, desc, delete
+from sqlalchemy import create_engine, String, Integer, DateTime, Text, select, Sequence, asc, desc, delete, and_
+from sqlalchemy.dialects import sqlite
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 # ---------------------------------------------------------------------

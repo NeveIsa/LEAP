@@ -13,9 +13,18 @@
       <h1>Student Logs Line Plot</h1>
       <p class="subtle">Plots the last 100 logs by timestamp; each student is a separate series.</p>
 
-      <div class="toolbar">
-        <span class="badge" id="countBadge">Loading…</span>
+      <div class="toolbar" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
         <a href="../dashboard.html">← Back to Dashboard</a>
+        <div style="flex:1"></div>
+        <label for="studentSelect">Student:</label>
+        <select id="studentSelect" class="input">
+          <option>Loading…</option>
+        </select>
+        <label for="expSelect">Experiment:</label>
+        <select id="expSelect" class="input">
+          <option>Loading…</option>
+        </select>
+        <span class="badge" id="countBadge">Loading…</span>
       </div>
 
       <div id="plot"></div>
@@ -105,20 +114,52 @@
       });
     }
 
-    async function main() {
-      const logs = await fetchLogs();
-      if (!logs) return;
+    function uniqueSorted(arr) {
+      return Array.from(new Set(arr)).sort((a, b) => {
+        if (a === b) return 0;
+        return a < b ? -1 : 1;
+      });
+    }
 
-      document.getElementById('countBadge').textContent = `${logs.length} logs`;
-      if (logs.length === 0) {
-        setMessage('No logs available yet. Try invoking some functions.');
+    function populateSelect(sel, values, placeholder) {
+      sel.innerHTML = '';
+      const optAll = document.createElement('option');
+      optAll.value = '';
+      optAll.textContent = placeholder;
+      sel.appendChild(optAll);
+      for (const v of values) {
+        if (!v) continue;
+        const o = document.createElement('option');
+        o.value = v;
+        o.textContent = v;
+        sel.appendChild(o);
+      }
+    }
+
+    function filterLogs(logs, sid, exp) {
+      return logs.filter(l => {
+        const sidOk = !sid || l.student_id === sid;
+        const expOk = !exp || l.experiment_name === exp;
+        return sidOk && expOk;
+      });
+    }
+
+    function buildAndRender(logs, sid, exp) {
+      const filtered = filterLogs(logs, sid, exp);
+      document.getElementById('countBadge').textContent = `${filtered.length} logs`;
+      const plotEl = document.getElementById('plot');
+      plotEl.innerHTML = '';
+      document.getElementById('legend').innerHTML = '';
+      setMessage('');
+
+      if (filtered.length === 0) {
+        setMessage('No logs for the selected filters.');
         return;
       }
 
-      const { xs, students, ys } = prepareSeries(logs);
-
+      const { xs, students, ys } = prepareSeries(filtered);
       if (xs.length === 0 || students.length === 0) {
-        setMessage('No plottable numeric results found in the last 100 logs.');
+        setMessage('No plottable numeric results for the selected filters.');
         return;
       }
 
@@ -126,59 +167,63 @@
         '#00f5d4', '#f15bb5', '#fee440', '#00bbf9', '#9b5de5',
         '#ef476f', '#06d6a0', '#ffd166', '#118ab2', '#073b4c',
       ];
-
       const series = [
         { label: 'time' },
-        ...students.map((sid, i) => ({
-          label: sid,
-          stroke: colors[i % colors.length],
-          width: 2,
-          spanGaps: true,
-        }))
+        ...students.map((sid, i) => ({ label: sid, stroke: colors[i % colors.length], width: 2, spanGaps: true }))
       ];
-
       const data = [xs, ...ys];
-
       const opts = {
         title: 'Last 100 Logs',
-        width: document.getElementById('plot').clientWidth,
+        width: plotEl.clientWidth,
         height: 420,
         series,
         axes: [
-          {
-            scale: 'x',
-            label: 'Time',
-            stroke: '#00f5d4', // Bright axis color
-            grid: { show: true },
-            values: (u, splits) => splits.map(v => new Date(v).toLocaleTimeString())
-          },
-          {
-            scale: 'y',
-            label: 'Result',
-            stroke: '#00f5d4', // Bright axis color
-            grid: { show: true }
-          }
+          { scale: 'x', label: 'Time', stroke: '#00f5d4', grid: { show: true }, values: (u, s) => s.map(v => new Date(v).toLocaleTimeString()) },
+          { scale: 'y', label: 'Result', stroke: '#00f5d4', grid: { show: true } },
         ],
-        scales: {
-          x: { time: true }
-        },
-        hooks: {
-          setSize: [u => { /* keep container height */ }]
-        }
+        scales: { x: { time: true } },
       };
-
-      const plotEl = document.getElementById('plot');
       const u = new uPlot(opts, data, plotEl);
       renderLegend(students, colors);
 
-      // Handle simple responsiveness
       let resizeTO;
       window.addEventListener('resize', () => {
         clearTimeout(resizeTO);
-        resizeTO = setTimeout(() => {
-          u.setSize({ width: plotEl.clientWidth, height: 420 });
-        }, 100);
+        resizeTO = setTimeout(() => u.setSize({ width: plotEl.clientWidth, height: 420 }), 100);
       });
+    }
+
+    async function main() {
+      const logs = await fetchLogs();
+      if (!logs) return;
+
+      const sSel = document.getElementById('studentSelect');
+      const eSel = document.getElementById('expSelect');
+
+      const students = uniqueSorted(logs.map(l => l.student_id).filter(Boolean));
+      const experiments = uniqueSorted(logs.map(l => l.experiment_name).filter(Boolean));
+
+      // Restore last selections
+      const savedSid = localStorage.getItem('viz.sid') || '';
+      const savedExp = localStorage.getItem('viz.exp') || '';
+
+      populateSelect(sSel, students, 'All students');
+      populateSelect(eSel, experiments, 'All experiments');
+
+      if (savedSid) sSel.value = savedSid;
+      if (savedExp) eSel.value = savedExp;
+
+      function rerender() {
+        localStorage.setItem('viz.sid', sSel.value);
+        localStorage.setItem('viz.exp', eSel.value);
+        buildAndRender(logs, sSel.value, eSel.value);
+      }
+
+      sSel.addEventListener('change', rerender);
+      eSel.addEventListener('change', rerender);
+
+      // Initial render
+      rerender();
     }
 
     document.addEventListener('DOMContentLoaded', main);
