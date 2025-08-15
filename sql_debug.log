@@ -275,3 +275,24 @@ FROM logs ORDER BY logs.ts DESC
 2025-08-14 21:55:20,868 - INFO - Generated SQL statement: SELECT logs.id, logs.ts, logs.student_id, logs.experiment_name, logs.func_name, logs.args_json, logs.result_json, logs.error 
 FROM logs ORDER BY logs.ts DESC
  LIMIT 100 OFFSET 0
+2025-08-14 22:01:27,159 - INFO - Generated SQL statement: SELECT logs.id, logs.ts, logs.student_id, logs.experiment_name, logs.func_name, logs.args_json, logs.result_json, logs.error 
+FROM logs ORDER BY logs.ts DESC
+ LIMIT 100 OFFSET 0
+2025-08-14 22:01:27,322 - INFO - Generated SQL statement: SELECT logs.id, logs.ts, logs.student_id, logs.experiment_name, logs.func_name, logs.args_json, logs.result_json, logs.error 
+FROM logs ORDER BY logs.ts DESC
+ LIMIT 100 OFFSET 0
+2025-08-14 22:02:35,067 - INFO - Generated SQL statement: SELECT logs.id, logs.ts, logs.student_id, logs.experiment_name, logs.func_name, logs.args_json, logs.result_json, logs.error 
+FROM logs ORDER BY logs.ts ASC
+ LIMIT 100 OFFSET 0
+2025-08-14 22:04:07,003 - INFO - Generated SQL statement: SELECT logs.id, logs.ts, logs.student_id, logs.experiment_name, logs.func_name, logs.args_json, logs.result_json, logs.error 
+FROM logs ORDER BY logs.ts ASC
+ LIMIT 100 OFFSET 0
+2025-08-14 22:05:48,038 - INFO - Generated SQL statement: SELECT logs.id, logs.ts, logs.student_id, logs.experiment_name, logs.func_name, logs.args_json, logs.result_json, logs.error 
+FROM logs ORDER BY logs.ts DESC
+ LIMIT 100 OFFSET 0
+2025-08-14 22:05:48,226 - INFO - Generated SQL statement: SELECT logs.id, logs.ts, logs.student_id, logs.experiment_name, logs.func_name, logs.args_json, logs.result_json, logs.error 
+FROM logs ORDER BY logs.ts DESC
+ LIMIT 100 OFFSET 0
+2025-08-14 22:06:03,906 - INFO - Generated SQL statement: SELECT logs.id, logs.ts, logs.student_id, logs.experiment_name, logs.func_name, logs.args_json, logs.result_json, logs.error 
+FROM logs ORDER BY logs.ts ASC
+ LIMIT 100 OFFSET 0
