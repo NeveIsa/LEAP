@@ -8,7 +8,7 @@ from fire import Fire
 
 SERVER_URL = "http://localhost:9000"
 STUDENT_ID = "s001" # Change to your assigned ID
-EXPERIMENT = "bisection-demo"
+EXPERIMENT = "eigen"
 
 def powerMethod(A, maxIterations = 1000, tol = 1e-10):
     n = A.shape[0]

@@ -1,0 +1,13 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments (common names)
+.venv/
+venv/
+env/
+
+# Editor/OS junk
+.DS_Store
+Thumbs.db

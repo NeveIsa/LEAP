@@ -247,11 +247,13 @@ def remove_student(student_id: str, authenticated: bool = Depends(is_admin_authe
 def get_server_logs(
     student_id: Optional[str] = Query(None, description="Optional: Filter logs by student ID."),
     experiment_name: Optional[str] = Query(None, description="Optional: Filter logs by experiment name."),
+    n: int = Query(100, ge=1, le=1000, description="Number of logs to return"),
+    order: Literal["latest", "earliest"] = Query("latest", description="Ordering by timestamp"),
     authenticated: bool = Depends(is_admin_authenticated)
 ):
-    """Returns the last N log events from the server, with optional filtering and ordering."""
+    """Returns up to N log events, optionally filtered and ordered."""
     try:
-        logs = storage.fetch_logs(student_id=student_id, experiment_name=experiment_name)
+        logs = storage.fetch_logs(student_id=student_id, experiment_name=experiment_name, n=n, order=order)
         return {"logs": logs}
     except Exception:
         # If logs table or DB isn't ready yet, return an empty list gracefully
@@ -260,16 +262,35 @@ def get_server_logs(
 # Public logs endpoint (no admin auth)
 @app.get("/logs")
 def get_logs(
-    student_id: Optional[str] = Query(None, description="Optional: Filter logs by student ID."),
-    experiment_name: Optional[str] = Query(None, description="Optional: Filter logs by experiment name."),
+    student_id: Optional[str] = Query(None, description="Optional: Filter logs by student ID. Alias: sid"),
+    experiment_name: Optional[str] = Query(None, description="Optional: Filter logs by experiment name. Alias: exp"),
+    sid: Optional[str] = Query(None, description="Alias for student_id"),
+    exp: Optional[str] = Query(None, description="Alias for experiment_name"),
+    n: int = Query(100, ge=1, le=1000, description="Number of logs to return"),
+    order: Literal["latest", "earliest"] = Query("latest", description="Ordering by timestamp"),
 ):
-    """Public endpoint: Returns logs, optionally filtered by student, with ordering."""
+    """Public endpoint: Returns logs, optionally filtered and ordered.
+
+    Supports both `student_id`/`experiment_name` and their short aliases `sid`/`exp`.
+    """
     try:
-        logs = storage.fetch_logs(student_id=student_id, experiment_name=experiment_name)
+        eff_student = student_id or sid
+        eff_experiment = experiment_name or exp
+        logs = storage.fetch_logs(student_id=eff_student, experiment_name=eff_experiment, n=n, order=order)
         return {"logs": logs}
     except Exception:
         # If the table doesn't exist yet or DB not initialized, return empty
         return {"logs": []}
+
+# Public endpoint to get distinct students/experiments for UI filters
+@app.get("/log-options")
+def get_log_options():
+    try:
+        students = storage.distinct_students_with_logs()
+        experiments = storage.distinct_experiments()
+        return {"students": students, "experiments": experiments}
+    except Exception:
+        return {"students": [], "experiments": []}
 
 if __name__ == "__main__":
     import uvicorn

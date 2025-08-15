@@ -16,7 +16,7 @@ import logging
 logging.basicConfig(filename='sql_debug.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logging.info("Logging configured and storage_orm.py imported.")
 
-from sqlalchemy import create_engine, String, Integer, DateTime, Text, select, Sequence, asc, desc, delete, and_
+from sqlalchemy import create_engine, String, Integer, DateTime, Text, select, Sequence, asc, desc, delete, and_, distinct
 from sqlalchemy.dialects import sqlite
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
@@ -126,28 +126,52 @@ def log_event(*, student_id: str, experiment_name: Optional[str], func_name: str
             # Re-raise original error if migration or retry didn't work
             raise
 
-def fetch_logs(student_id: Optional[str] = None, experiment_name: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Fetches logs, allowing for filtering."""
+def fetch_logs(
+    *,
+    student_id: Optional[str] = None,
+    experiment_name: Optional[str] = None,
+    n: int = 100,
+    order: str = "latest",
+) -> List[Dict[str, Any]]:
+    """Fetch logs with optional filtering, ordering, and limit.
+
+    Args:
+        student_id: optional filter by student.
+        experiment_name: optional filter by experiment.
+        n: number of rows to return (default 100).
+        order: 'latest' (desc) or 'earliest' (asc) by timestamp.
+    """
     with SessionLocal() as s:
         stmt = select(Log)
-        
+
         conditions = []
         if student_id:
             conditions.append(Log.student_id == student_id)
         if experiment_name:
             conditions.append(Log.experiment_name == experiment_name)
-        
+
         if conditions:
             stmt = stmt.where(and_(*conditions))
-        
-        # Compile the statement to get the raw SQL string
-        compiled_stmt = stmt.compile(dialect=sqlite.dialect(), compile_kwargs={"literal_binds": True})
-        logging.info(f"Generated SQL statement: {compiled_stmt}")
-        
-        rows = s.execute(stmt).scalars().all() # Removed order_by and limit
+
+        stmt = stmt.order_by(desc(Log.ts) if order != "earliest" else asc(Log.ts)).limit(int(max(1, min(n, 1000))))
+
+        # Log the compiled SQL for debugging
+        try:
+            compiled_stmt = stmt.compile(dialect=sqlite.dialect(), compile_kwargs={"literal_binds": True})
+            logging.info(f"Generated SQL statement: {compiled_stmt}")
+        except Exception:
+            pass
+
+        rows = s.execute(stmt).scalars().all()
+
+        def _iso_ts(dt: datetime.datetime) -> str:
+            # Ensure timezone-aware ISO; assume stored UTC when naive
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=datetime.timezone.utc)
+            return dt.isoformat()
         return [
             {
-                "ts": r.ts.isoformat(),
+                "ts": _iso_ts(r.ts),
                 "student_id": r.student_id,
                 "experiment_name": r.experiment_name,
                 "func_name": r.func_name,
@@ -157,6 +181,18 @@ def fetch_logs(student_id: Optional[str] = None, experiment_name: Optional[str] 
             }
             for r in rows
         ]
+
+def distinct_students_with_logs() -> List[str]:
+    """Return distinct student_ids that have at least one log, sorted."""
+    with SessionLocal() as s:
+        rows = s.execute(select(distinct(Log.student_id)).order_by(asc(Log.student_id))).all()
+        return [r[0] for r in rows if r and r[0]]
+
+def distinct_experiments() -> List[str]:
+    """Return distinct non-null experiment_name values from logs, sorted."""
+    with SessionLocal() as s:
+        rows = s.execute(select(distinct(Log.experiment_name)).where(Log.experiment_name.is_not(None)).order_by(asc(Log.experiment_name))).all()
+        return [r[0] for r in rows if r and r[0]]
 
 if __name__ == "__main__":
     # Example usage

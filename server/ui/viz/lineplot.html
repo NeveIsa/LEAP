@@ -36,16 +36,35 @@
   <script src="https://unpkg.com/uplot/dist/uPlot.iife.min.js"></script>
   <script>
     const API_BASE_URL = window.location.origin;
+    const QS = new URLSearchParams(window.location.search);
+    const QS_SID = QS.get('sid') || '';
+    const QS_EXP = QS.get('exp') || '';
 
     async function fetchLogs() {
       try {
-        const res = await fetch(`${API_BASE_URL}/logs?n=100&order=earliest`);
+        const url = new URL(`${API_BASE_URL}/logs`);
+        url.searchParams.set('n', '100');
+        url.searchParams.set('order', 'earliest');
+        if (QS_SID) url.searchParams.set('sid', QS_SID);
+        if (QS_EXP) url.searchParams.set('exp', QS_EXP);
+        const res = await fetch(url.toString());
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         return data.logs || [];
       } catch (e) {
         console.error('Failed to fetch logs', e);
         setMessage('Failed to fetch logs. Is the server running?');
+        return null;
+      }
+    }
+
+    async function fetchOptions() {
+      try {
+        const res = await fetch(`${API_BASE_URL}/log-options`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return await res.json();
+      } catch (e) {
+        console.warn('Failed to fetch log options, will derive from logs as fallback.', e);
         return null;
       }
     }
@@ -178,7 +197,7 @@
         height: 420,
         series,
         axes: [
-          { scale: 'x', label: 'Time', stroke: '#00f5d4', grid: { show: true }, values: (u, s) => s.map(v => new Date(v).toLocaleTimeString()) },
+          { scale: 'x', label: 'Time', stroke: '#00f5d4', grid: { show: true }, values: (u, s) => s.map(v => new Date(v).toLocaleString([], { hour12: false, year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short' })) },
           { scale: 'y', label: 'Result', stroke: '#00f5d4', grid: { show: true } },
         ],
         scales: { x: { time: true } },
@@ -200,18 +219,22 @@
       const sSel = document.getElementById('studentSelect');
       const eSel = document.getElementById('expSelect');
 
-      const students = uniqueSorted(logs.map(l => l.student_id).filter(Boolean));
-      const experiments = uniqueSorted(logs.map(l => l.experiment_name).filter(Boolean));
+      // Prefer server-provided options to include all values; fallback to deriving from logs
+      let opts = await fetchOptions();
+      let students = opts && Array.isArray(opts.students) ? opts.students : uniqueSorted(logs.map(l => l.student_id).filter(Boolean));
+      let experiments = opts && Array.isArray(opts.experiments) ? opts.experiments : uniqueSorted(logs.map(l => l.experiment_name).filter(Boolean));
 
       // Restore last selections
       const savedSid = localStorage.getItem('viz.sid') || '';
       const savedExp = localStorage.getItem('viz.exp') || '';
+      const initSid = QS_SID || savedSid;
+      const initExp = QS_EXP || savedExp;
 
       populateSelect(sSel, students, 'All students');
       populateSelect(eSel, experiments, 'All experiments');
 
-      if (savedSid) sSel.value = savedSid;
-      if (savedExp) eSel.value = savedExp;
+      if (initSid) sSel.value = initSid;
+      if (initExp) eSel.value = initExp;
 
       function rerender() {
         localStorage.setItem('viz.sid', sSel.value);

@@ -13,12 +13,19 @@
       <span class="subtle">Last 100 entries</span>
     </header>
 
-    <div class="toolbar">
+    <div class="toolbar" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
       <a href="dashboard.html">← Back</a>
-      <input type="text" id="studentIdFilter" placeholder="Student ID">
-      <input type="text" id="experimentFilter" placeholder="Experiment Name">
+      <div style="flex:1"></div>
+      <label for="studentSelect">Student:</label>
+      <select id="studentSelect" class="input">
+        <option value="">All</option>
+      </select>
+      <label for="expSelect">Experiment:</label>
+      <select id="expSelect" class="input">
+        <option value="">All</option>
+      </select>
       <button class="btn" id="filterBtn">Filter</button>
-      <button class="btn" id="refreshBtn">Refresh</button>
+      <button class="btn" id="refreshBtn">Clear</button>
       <span class="badge" id="countBadge">Loading…</span>
       <span class="badge" id="updatedBadge"></span>
     </div>
@@ -49,8 +56,11 @@
     const countBadge = document.getElementById('countBadge');
     const updatedBadge = document.getElementById('updatedBadge');
     const msg = document.getElementById('message');
-    const studentIdFilter = document.getElementById('studentIdFilter');
-    const experimentFilter = document.getElementById('experimentFilter');
+    const studentSelect = document.getElementById('studentSelect');
+    const expSelect = document.getElementById('expSelect');
+    const QS = new URLSearchParams(window.location.search);
+    const QS_SID = QS.get('sid') || QS.get('student_id') || '';
+    const QS_EXP = QS.get('exp') || QS.get('experiment_name') || '';
 
     function setMsg(text) { msg.textContent = text || ''; }
 
@@ -74,6 +84,24 @@
       }
     }
 
+    function uniqueSorted(arr) {
+      return Array.from(new Set(arr.filter(Boolean))).sort((a,b) => a < b ? -1 : a > b ? 1 : 0);
+    }
+
+    function populateSelect(sel, values) {
+      sel.innerHTML = '';
+      const optAll = document.createElement('option');
+      optAll.value = '';
+      optAll.textContent = 'All';
+      sel.appendChild(optAll);
+      for (const v of values) {
+        const o = document.createElement('option');
+        o.value = v;
+        o.textContent = v;
+        sel.appendChild(o);
+      }
+    }
+
     function renderLogs(logs) {
       logBody.innerHTML = '';
       if (!logs.length) {
@@ -89,7 +117,7 @@
       for (const row of logs) {
         const tr = document.createElement('tr');
         const tds = [
-          new Date(row.ts).toLocaleString(),
+          new Date(row.ts).toLocaleString([], { hour12: false, year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short' }),
           row.student_id || '',
           row.experiment_name || '',
           row.func_name || '',
@@ -109,11 +137,19 @@
       }
     }
 
+    function updateUrlParams(sid, exp) {
+      const url = new URL(window.location.href);
+      if (sid) url.searchParams.set('sid', sid); else url.searchParams.delete('sid');
+      if (exp) url.searchParams.set('exp', exp); else url.searchParams.delete('exp');
+      history.replaceState(null, '', url);
+    }
+
     async function refresh() {
       setMsg('');
       countBadge.textContent = 'Loading…';
-      const studentId = studentIdFilter.value.trim();
-      const experimentName = experimentFilter.value.trim();
+      const studentId = studentSelect.value;
+      const experimentName = expSelect.value;
+      updateUrlParams(studentId, experimentName);
       const logs = await fetchLogs(studentId, experimentName);
       renderLogs(logs);
       countBadge.textContent = `${logs.length} logs`;
@@ -122,11 +158,22 @@
 
     document.getElementById('filterBtn').addEventListener('click', refresh);
     document.getElementById('refreshBtn').addEventListener('click', () => {
-        studentIdFilter.value = '';
-        experimentFilter.value = '';
+        studentSelect.value = '';
+        expSelect.value = '';
         refresh();
     });
-    document.addEventListener('DOMContentLoaded', refresh);
+    document.addEventListener('DOMContentLoaded', async () => {
+      // Populate dropdowns from recent logs
+      const seedLogs = await fetchLogs('', '');
+      const students = uniqueSorted(seedLogs.map(l => l.student_id));
+      const exps = uniqueSorted(seedLogs.map(l => l.experiment_name));
+      populateSelect(studentSelect, students);
+      populateSelect(expSelect, exps);
+      // Apply query selections if present
+      if (QS_SID) studentSelect.value = QS_SID;
+      if (QS_EXP) expSelect.value = QS_EXP;
+      refresh();
+    });
   </script>
 </body>
 </html>
