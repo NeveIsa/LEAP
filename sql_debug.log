@@ -296,3 +296,4 @@ FROM logs ORDER BY logs.ts DESC
 2025-08-14 22:06:03,906 - INFO - Generated SQL statement: SELECT logs.id, logs.ts, logs.student_id, logs.experiment_name, logs.func_name, logs.args_json, logs.result_json, logs.error 
 FROM logs ORDER BY logs.ts ASC
  LIMIT 100 OFFSET 0
+2025-08-18 17:01:53,532 - INFO - Logging configured and storage_orm.py imported.
