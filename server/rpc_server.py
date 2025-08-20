@@ -13,6 +13,7 @@ import json
 import os
 import glob
 import sys
+import datetime
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
@@ -268,6 +269,8 @@ def get_logs(
     exp: Optional[str] = Query(None, description="Alias for experiment_name"),
     n: int = Query(100, ge=1, le=1000, description="Number of logs to return"),
     order: Literal["latest", "earliest"] = Query("latest", description="Ordering by timestamp"),
+    start_time: Optional[datetime.datetime] = Query(None, description="ISO 8601 format"),
+    end_time: Optional[datetime.datetime] = Query(None, description="ISO 8601 format"),
 ):
     """Public endpoint: Returns logs, optionally filtered and ordered.
 
@@ -276,7 +279,14 @@ def get_logs(
     try:
         eff_student = student_id or sid
         eff_experiment = experiment_name or exp
-        logs = storage.fetch_logs(student_id=eff_student, experiment_name=eff_experiment, n=n, order=order)
+        logs = storage.fetch_logs(
+            student_id=eff_student, 
+            experiment_name=eff_experiment, 
+            n=n, 
+            order=order,
+            start_time=start_time,
+            end_time=end_time,
+        )
         return {"logs": logs}
     except Exception:
         # If the table doesn't exist yet or DB not initialized, return empty

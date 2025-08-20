@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Optional, List, Dict, Any
 import os
 import datetime
+import json
 
 import logging
 
@@ -132,6 +133,8 @@ def fetch_logs(
     experiment_name: Optional[str] = None,
     n: int = 100,
     order: str = "latest",
+    start_time: Optional[datetime.datetime] = None,
+    end_time: Optional[datetime.datetime] = None,
 ) -> List[Dict[str, Any]]:
     """Fetch logs with optional filtering, ordering, and limit.
 
@@ -140,6 +143,8 @@ def fetch_logs(
         experiment_name: optional filter by experiment.
         n: number of rows to return (default 100).
         order: 'latest' (desc) or 'earliest' (asc) by timestamp.
+        start_time: optional filter for logs after this time.
+        end_time: optional filter for logs before this time.
     """
     with SessionLocal() as s:
         stmt = select(Log)
@@ -149,6 +154,10 @@ def fetch_logs(
             conditions.append(Log.student_id == student_id)
         if experiment_name:
             conditions.append(Log.experiment_name == experiment_name)
+        if start_time:
+            conditions.append(Log.ts >= start_time)
+        if end_time:
+            conditions.append(Log.ts <= end_time)
 
         if conditions:
             stmt = stmt.where(and_(*conditions))
@@ -169,14 +178,23 @@ def fetch_logs(
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=datetime.timezone.utc)
             return dt.isoformat()
+
+        def _try_parse_json(json_str: Optional[str]) -> Any:
+            if json_str is None:
+                return None
+            try:
+                return json.loads(json_str)
+            except json.JSONDecodeError:
+                return json_str
+
         return [
             {
                 "ts": _iso_ts(r.ts),
                 "student_id": r.student_id,
                 "experiment_name": r.experiment_name,
                 "func_name": r.func_name,
-                "args_json": r.args_json,
-                "result_json": r.result_json,
+                "args_json": _try_parse_json(r.args_json),
+                "result_json": _try_parse_json(r.result_json),
                 "error": r.error,
             }
             for r in rows
