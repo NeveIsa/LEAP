@@ -75,6 +75,89 @@ app.add_middleware(
 
 app.mount("/ui", StaticFiles(directory=os.path.join(_current_dir, "ui")), name="ui")
 
+# Mount marimo notebooks directory
+marimo_dir = os.path.join(_project_root, "marimo-viz")
+if os.path.exists(marimo_dir):
+    app.mount("/marimo", StaticFiles(directory=marimo_dir), name="marimo")
+
+# Add route to serve marimo notebook as HTML
+@app.get("/marimo-embed/{notebook_name}")
+async def serve_marimo_notebook(notebook_name: str):
+    """Serve a marimo notebook as an embedded HTML page"""
+    notebook_path = os.path.join(marimo_dir, f"{notebook_name}.py")
+    
+    if not os.path.exists(notebook_path):
+        raise HTTPException(status_code=404, detail=f"Notebook {notebook_name}.py not found")
+    
+    # Read the notebook content
+    with open(notebook_path, 'r', encoding='utf-8') as f:
+        notebook_content = f.read()
+    
+    # Create a simple HTML page that embeds the notebook
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Marimo Notebook - {notebook_name}</title>
+        <style>
+            body {{
+                margin: 0;
+                padding: 20px;
+                background: #1a1a1a;
+                color: #e0e0e0;
+                font-family: 'Inter', sans-serif;
+            }}
+            .notebook-container {{
+                max-width: 1200px;
+                margin: 0 auto;
+                background: #2d2d2d;
+                border-radius: 8px;
+                padding: 20px;
+                border: 1px solid #444;
+            }}
+            .code-block {{
+                background: #1a1a1a;
+                border: 1px solid #444;
+                border-radius: 4px;
+                padding: 15px;
+                margin: 10px 0;
+                font-family: 'Courier New', monospace;
+                white-space: pre-wrap;
+                color: #e0e0e0;
+            }}
+            .output {{
+                background: #2a2a2a;
+                border: 1px solid #555;
+                border-radius: 4px;
+                padding: 10px;
+                margin: 5px 0;
+                color: #b0b0b0;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="notebook-container">
+            <h1>Marimo Notebook: {notebook_name}</h1>
+            <p>This is a static view of the notebook. For interactive execution, you would need to run a marimo server.</p>
+            
+            <h2>Notebook Content:</h2>
+            <div class="code-block">{notebook_content}</div>
+            
+            <h2>To run this notebook interactively:</h2>
+            <div class="output">
+                <p>1. Install marimo: pip install marimo</p>
+                <p>2. Run the notebook: marimo run {notebook_name}.py</p>
+                <p>3. Open the URL shown in the terminal</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    return Response(content=html_content, media_type="text/html")
+
 @app.get("/")
 async def root_redirect(request: Request):
     # Auth landing: dashboard if logged in, else login page

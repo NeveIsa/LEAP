@@ -7,3 +7,6 @@ requests
 sqlalchemy
 uvicorn
 fire
+pandas
+matplotlib
+seaborn

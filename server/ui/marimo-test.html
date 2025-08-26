@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Marimo Test</title>
+    <link rel="stylesheet" href="style/main.css" />
+    
+    <!-- Marimo snippets configuration for dark mode -->
+    <script type="text/x-marimo-snippets-config">
+        configureMarimoButtons({title: "Open in marimo notebook"});
+        configureMarimoIframes({
+            height: "600px",
+            theme: "dark"
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@marimo-team/marimo-snippets@1"></script>
+    
+    <style>
+        .test-container {
+            margin: 20px 0;
+            padding: 20px;
+            background: #2d2d2d;
+            border: 1px solid #444;
+            border-radius: 8px;
+        }
+        .test-title {
+            color: #e0e0e0;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body class="page-centered">
+    <div class="dashboard-container">
+        <h1>Marimo Snippets Test</h1>
+        
+        <div class="test-container">
+            <h2 class="test-title">Simple Test Notebook</h2>
+            <marimo-iframe data-height="400px" data-theme="dark">
+                <div>
+                    <pre><code class="language-python">import marimo as mo
+import numpy as np
+import matplotlib.pyplot as plt</code></pre>
+                    
+                    <pre><code class="language-python"># Create some sample data
+x = np.linspace(0, 10, 100)
+y = np.sin(x)</code></pre>
+                    
+                    <pre><code class="language-python"># Plot the data
+plt.figure(figsize=(10, 6))
+plt.plot(x, y, 'b-', linewidth=2)
+plt.title('Simple Sine Wave', color='white')
+plt.xlabel('x', color='white')
+plt.ylabel('sin(x)', color='white')
+plt.grid(True, alpha=0.3)
+plt.show()</code></pre>
+                </div>
+            </marimo-iframe>
+        </div>
+        
+        <div class="test-container">
+            <h2 class="test-title">Interactive Widget Test</h2>
+            <marimo-iframe data-height="300px" data-theme="dark">
+                <div>
+                    <pre><code class="language-python">import marimo as mo</code></pre>
+                    
+                    <pre><code class="language-python"># Create an interactive slider
+slider = mo.ui.slider(1, 10, value=5)
+slider</code></pre>
+                    
+                    <pre><code class="language-python"># Display the value
+f"Slider value: {slider.value}"</code></pre>
+                    
+                    <pre><code class="language-python"># Create a simple visualization
+import matplotlib.pyplot as plt
+import numpy as np
+
+x = np.linspace(0, 10, 100)
+y = np.sin(x * slider.value)
+
+plt.figure(figsize=(10, 6))
+plt.plot(x, y, 'g-', linewidth=2)
+plt.title(f'Sine Wave with Frequency {slider.value}', color='white')
+plt.xlabel('x', color='white')
+plt.ylabel('sin(x)', color='white')
+plt.grid(True, alpha=0.3)
+plt.show()</code></pre>
+                </div>
+            </marimo-iframe>
+        </div>
+        
+        <div style="margin-top: 20px;">
+            <a href="dashboard.html" class="btn">Back to Dashboard</a>
+        </div>
+    </div>
+</body>
+</html>
