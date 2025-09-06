@@ -2,7 +2,9 @@ duckdb
 duckdb-engine
 fastapi
 marimo
-pydantic
+# Pin pydantic and core to avoid import mismatches
+pydantic==2.11.7
+pydantic-core==2.33.2
 requests
 sqlalchemy
 uvicorn

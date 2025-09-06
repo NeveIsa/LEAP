@@ -353,3 +353,23 @@ WHERE logs.student_id = 's001' AND logs.experiment_name = 'eigen' ORDER BY logs.
 FROM logs 
 WHERE logs.student_id = 's001' AND logs.experiment_name = 'eigen' ORDER BY logs.ts DESC
  LIMIT 100 OFFSET 0
+2025-08-24 01:04:58,058 - INFO - Logging configured and storage_orm.py imported.
+2025-08-24 01:06:11,527 - INFO - Logging configured and storage_orm.py imported.
+2025-08-24 01:06:26,561 - INFO - Logging configured and storage_orm.py imported.
+2025-08-24 01:07:07,717 - INFO - Logging configured and storage_orm.py imported.
+2025-08-24 01:08:50,995 - INFO - Logging configured and storage_orm.py imported.
+2025-08-24 01:09:31,883 - INFO - Logging configured and storage_orm.py imported.
+2025-08-24 01:09:47,958 - INFO - Logging configured and storage_orm.py imported.
+2025-08-24 01:10:13,253 - INFO - Generated SQL statement: SELECT logs.id, logs.ts, logs.student_id, logs.experiment_name, logs.func_name, logs.args_json, logs.result_json, logs.error 
+FROM logs ORDER BY logs.ts DESC
+ LIMIT 100 OFFSET 0
+2025-08-24 01:10:13,372 - INFO - Generated SQL statement: SELECT logs.id, logs.ts, logs.student_id, logs.experiment_name, logs.func_name, logs.args_json, logs.result_json, logs.error 
+FROM logs ORDER BY logs.ts DESC
+ LIMIT 100 OFFSET 0
+2025-08-24 01:10:31,605 - INFO - Generated SQL statement: SELECT logs.id, logs.ts, logs.student_id, logs.experiment_name, logs.func_name, logs.args_json, logs.result_json, logs.error 
+FROM logs ORDER BY logs.ts DESC
+ LIMIT 100 OFFSET 0
+2025-08-24 01:10:31,839 - INFO - Generated SQL statement: SELECT logs.id, logs.ts, logs.student_id, logs.experiment_name, logs.func_name, logs.args_json, logs.result_json, logs.error 
+FROM logs ORDER BY logs.ts DESC
+ LIMIT 100 OFFSET 0
+2025-09-05 20:07:49,390 - INFO - Logging configured and storage_orm.py imported.
