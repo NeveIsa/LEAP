@@ -49,8 +49,16 @@
                 if (response.ok) {
                     window.location.href = 'dashboard.html';
                 } else {
-                    const errorData = await response.json();
-                    showMessage(errorData.detail || 'Login failed', 'error');
+                    let msg = 'Login failed';
+                    try {
+                        const data = await response.json();
+                        if (data && data.detail !== undefined) {
+                            msg = (typeof data.detail === 'string') ? data.detail : JSON.stringify(data.detail);
+                        }
+                    } catch (_) {
+                        try { msg = await response.text(); } catch {}
+                    }
+                    showMessage(msg || 'Login failed', 'error');
                 }
             } catch (error) {
                 console.error('Login error:', error);

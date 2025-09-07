@@ -121,7 +121,10 @@
                             <td>${student.student_id}</td>
                             <td>${student.name}</td>
                             <td>${student.email || 'N/A'}</td>
-                            <td><button class="btn-delete" data-id="${student.student_id}">Delete</button></td>
+                            <td>
+                                <button class="btn-delete" data-id="${student.student_id}">Delete</button>
+                                <button class="btn btn-warning btn-delete-logs" data-id="${student.student_id}" title="Delete all logs for this student">Clear Logs</button>
+                            </td>
                         `;
                         studentTableBody.appendChild(row);
                     });
@@ -147,6 +150,16 @@
             return set;
         };
 
+        async function extractErrorMessage(resp) {
+            try {
+                const data = await resp.json();
+                if (data && data.detail !== undefined) {
+                    return (typeof data.detail === 'string') ? data.detail : JSON.stringify(data.detail);
+                }
+            } catch (_) { /* ignore */ }
+            try { return await resp.text(); } catch (_) { return ''; }
+        }
+
         const addStudent = async (event) => {
             event.preventDefault();
             const studentId = document.getElementById('student-id').value.trim();
@@ -162,8 +175,8 @@
                 if (response.status === 401) { window.location.href = 'login.html'; return; }
                 if (response.status === 409) { showMessage('No active experiment. Start one from the landing page.', 'error'); return; }
                 if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({ detail: 'An unknown error occurred.' }));
-                    throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+                    const detail = await extractErrorMessage(response);
+                    throw new Error(detail || `HTTP ${response.status}`);
                 }
                 showMessage('Student added successfully!', 'success');
                 addStudentForm.reset();
@@ -272,7 +285,7 @@
                 const response = await fetch(getApiUrl(`/admin/student/${studentId}`), { method: 'DELETE', credentials: 'include' });
                 if (response.status === 401) { window.location.href = 'login.html'; return; }
                 if (response.status === 409) { showMessage('No active experiment. Start one from the landing page.', 'error'); return; }
-                if (!response.ok) { const errorData = await response.json().catch(() => ({ detail: 'An unknown error occurred.' })); throw new Error(errorData.detail || `HTTP error! status: ${response.status}`); }
+                if (!response.ok) { const detail = await extractErrorMessage(response); throw new Error(detail || `HTTP ${response.status}`); }
                 showMessage('Student deleted successfully!', 'warning');
                 fetchStudents();
             } catch (error) { console.error('Error deleting student:', error); showMessage(`Error: ${error.message}`, 'error'); }
@@ -288,7 +301,25 @@
 
         document.addEventListener('DOMContentLoaded', async () => { await checkAdmin(); await fetchStudents(); });
         addStudentForm.addEventListener('submit', addStudent);
-        studentTableBody.addEventListener('click', (event) => { if (event.target.classList.contains('btn-delete')) { deleteStudent(event.target.dataset.id); } });
+        studentTableBody.addEventListener('click', async (event) => {
+            const t = event.target;
+            if (t.classList.contains('btn-delete')) { deleteStudent(t.dataset.id); return; }
+            if (t.classList.contains('btn-delete-logs')) {
+                const studentId = t.dataset.id;
+                if (!confirm(`Delete ALL logs for student ${studentId}? This cannot be undone.`)) return;
+                try {
+                    const resp = await fetch(getApiUrl(`/admin/logs/student/${studentId}`), { method: 'DELETE', credentials: 'include' });
+                    if (resp.status === 401) { showMessage('Login required to manage logs.', 'error'); return; }
+                    if (resp.status === 409) { showMessage('No active experiment. Start one from the landing page.', 'error'); return; }
+                    if (!resp.ok) { const detail = await extractErrorMessage(resp); throw new Error(detail || `HTTP ${resp.status}`); }
+                    const data = await resp.json();
+                    showMessage(`Cleared ${data.deleted ?? 0} logs for ${studentId}.`, 'warning');
+                } catch (e) {
+                    console.error('Error deleting logs:', e);
+                    showMessage(`Error: ${e.message || e}`, 'error');
+                }
+            }
+        });
     </script>
 
 </body>

@@ -158,7 +158,9 @@
     function baseUrl() {
       const origin = window.location.origin;
       const m = window.location.pathname.match(/\/exp\/([^\/]+)/);
-      return m ? `${origin}/exp/${m[1]}` : origin;
+      if (m && m[1]) return `${origin}/exp/${m[1]}`;
+      const expName = (expNameEl.value || '').trim();
+      return expName ? `${origin}/exp/${expName}` : origin;
     }
     // Set scope badge
     (function(){
@@ -198,26 +200,23 @@
     async function sendResult(kind, value) {
       const { sid, trial } = ensureRequiredFields();
       const payload = { kind, value, ts: nowIso() };
-      // Include experiment context for server-side validation (from the field or auto-detect)
-      let experiment_name = expNameEl.value.trim();
-      if (!experiment_name) {
-        const ctxMatch = window.location.pathname.match(/\/exp\/([^\/]+)/);
-        if (ctxMatch && ctxMatch[1]) experiment_name = ctxMatch[1];
-        if (!experiment_name) {
-          try {
-            const res = await fetch(`${window.location.origin}/api/active-experiment`);
-            if (res.ok) { const data = await res.json(); experiment_name = data.active || ''; }
-          } catch (_) {}
-        }
-      }
-      const body = { student_id: sid, func_name: 'echo', args: [payload], trial, experiment_name };
-      const res = await fetch(`${baseUrl()}/call`, {
+      // Root APIs auto-scope to the active experiment; no need to send experiment_name
+      const body = { student_id: sid, func_name: 'echo', args: [payload], trial };
+      const url = `${window.location.origin}/call`;
+      const res = await fetch(url, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
       });
       if (!res.ok) {
-        let detail = '';
-        try { detail = (await res.json()).detail || ''; } catch {}
-        throw new Error(detail || `HTTP ${res.status}`);
+        let msg = '';
+        try {
+          const data = await res.json();
+          if (data && data.detail !== undefined) {
+            msg = (typeof data.detail === 'string') ? data.detail : JSON.stringify(data.detail);
+          }
+        } catch {
+          try { msg = await res.text(); } catch {}
+        }
+        throw new Error(msg || `HTTP ${res.status}`);
       }
       const data = await res.json();
       return data.result;
