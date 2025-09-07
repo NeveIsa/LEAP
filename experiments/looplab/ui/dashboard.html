@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>LoopLab • Home</title>
+  <link rel="stylesheet" href="style/app.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <a class="link" href="/">← Experiments</a>
+      <div class="spacer"></div>
+      <span id="scope" class="badge">Scope</span>
+    </div>
+    <h1 style="margin:8px 0 10px 0;">LoopLab</h1>
+    <p class="msg">A crisp, minimal lab space. Manage your roster and explore live logs.</p>
+
+    <div class="grid" style="margin-top:16px;">
+      <div class="card">
+        <h3 style="margin:0 0 6px 0;">Roster</h3>
+        <p class="msg">Add/remove students. Bulk‑import via CSV.</p>
+        <div style="margin-top:10px"><a class="btn" href="roster.html">Open Roster</a></div>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 6px 0;">Log Stream</h3>
+        <p class="msg">Filter by student or tag. Watch class activity in near‑real time.</p>
+        <div style="margin-top:10px"><a class="btn" href="stream.html">Open Logs</a></div>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 6px 0;">Quiz</h3>
+        <p class="msg">Multiple‑choice questions. Each answer is logged instantly.</p>
+        <div style="margin-top:10px"><a class="btn" href="quiz.html">Open Quiz</a></div>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 6px 0;">Auth</h3>
+        <p class="msg">Admin endpoints require login.</p>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <a class="btn ghost" href="login.html">Login</a>
+          <button id="logout" class="btn ghost">Logout</button>
+          <span id="auth" class="pill">…</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const origin = window.location.origin;
+    const m = window.location.pathname.match(/\/exp\/([^\/]+)/);
+    const exp = m ? m[1] : null;
+    document.getElementById('scope').textContent = `Scope: ${exp || 'root'}`;
+    async function ping(){
+      try{ const r=await fetch(`${origin}${exp?`/exp/${exp}`:''}/admin/ping`,{credentials:'include'}); document.getElementById('auth').textContent = r.ok? 'logged in': 'logged out'; }catch{ document.getElementById('auth').textContent='unknown'; }
+    }
+    document.getElementById('logout').onclick = async()=>{ try{ await fetch(`${origin}${exp?`/exp/${exp}`:''}/admin/logout`,{method:'POST',credentials:'include'});}catch{}; ping(); };
+    ping();
+  </script>
+</body>
+</html>

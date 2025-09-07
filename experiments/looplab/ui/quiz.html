@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>LoopLab • Quiz</title>
+  <link rel="stylesheet" href="style/app.css" />
+  <style>
+    .q{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px}
+    .q h3{margin:0 0 8px 0}
+    .choices{display:grid;gap:8px}
+    .row{display:flex;gap:8px;align-items:center}
+    .row .spacer{flex:1}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <a class="link" href="dashboard.html">← Back</a>
+      <div class="spacer"></div>
+      <span id="scope" class="badge">Scope</span>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">
+        <div class="field"><label>Student ID</label><input id="sid" class="input" placeholder="e.g. s001"></div>
+        <div class="field"><label>Trial (optional)</label><input id="trial" class="input" placeholder="e.g. quiz-01"></div>
+        <div class="field"><label>&nbsp;</label><span id="reg" class="pill">—</span></div>
+      </div>
+      <div class="msg">Answers are logged immediately when you submit.</div>
+    </div>
+
+    <div id="qs" class="stack"></div>
+  </div>
+
+  <script>
+    const origin = location.origin; const m = location.pathname.match(/\/exp\/([^\/]+)/); const exp = m? m[1]: null;
+    document.getElementById('scope').textContent = `Scope: ${exp||'root'}`;
+    const qsEl = document.getElementById('qs');
+    const sidEl = document.getElementById('sid');
+    const trialEl = document.getElementById('trial');
+    const regEl = document.getElementById('reg');
+
+    // Persist student id
+    sidEl.value = localStorage.getItem('looplab.quiz.sid') || '';
+    sidEl.addEventListener('input', ()=> localStorage.setItem('looplab.quiz.sid', sidEl.value.trim()));
+    trialEl.value = localStorage.getItem('looplab.quiz.trial') || '';
+    trialEl.addEventListener('input', ()=> localStorage.setItem('looplab.quiz.trial', trialEl.value.trim()));
+
+    async function checkReg(){
+      const sid = sidEl.value.trim(); if(!sid){ regEl.textContent='—'; return; }
+      try{ const r = await fetch(`${origin}/is-registered?student_id=${encodeURIComponent(sid)}`);
+        if(!r.ok){ regEl.textContent='?'; return; }
+        const d = await r.json(); regEl.textContent = d.registered? 'registered' : 'not registered';
+      }catch{ regEl.textContent='?'; }
+    }
+    sidEl.addEventListener('blur', checkReg); checkReg();
+
+    const QUESTIONS = [
+      { id: 'q1', text: 'Which method finds roots by halving intervals?', choices: [ 'Newton-Raphson', 'Secant', 'Bisection', 'Fixed-point' ], correct: 2 },
+      { id: 'q2', text: 'Derivative of x^2 is:', choices: [ 'x', '2x', 'x^3', 'constant' ], correct: 1 },
+      { id: 'q3', text: 'Matrix multiplication A(m×n)·B(n×p) yields shape:', choices: [ 'm×n', 'n×p', 'm×p', 'p×m' ], correct: 2 },
+    ];
+
+    function render(){
+      qsEl.innerHTML='';
+      QUESTIONS.forEach((q, idx)=>{
+        const wrap = document.createElement('div'); wrap.className='q';
+        const title = document.createElement('h3'); title.textContent = `${idx+1}. ${q.text}`; wrap.appendChild(title);
+        const choices = document.createElement('div'); choices.className='choices';
+        q.choices.forEach((c, i)=>{
+          const id = `${q.id}_${i}`;
+          const label = document.createElement('label'); label.className='row';
+          label.innerHTML = `<input type="radio" name="${q.id}" value="${i}"> <span>${c}</span>`;
+          choices.appendChild(label);
+        });
+        wrap.appendChild(choices);
+        const row = document.createElement('div'); row.className='row'; row.style.marginTop='10px';
+        const btn = document.createElement('button'); btn.className='btn'; btn.textContent='Submit';
+        const msg = document.createElement('span'); msg.className='msg'; msg.textContent='';
+        row.appendChild(btn); row.appendChild(msg); wrap.appendChild(row);
+
+        btn.onclick = async ()=>{
+          const sid = sidEl.value.trim(); const trial = trialEl.value.trim();
+          if(!sid){ msg.textContent='Enter Student ID'; msg.className='msg err'; return; }
+          const sel = wrap.querySelector(`input[name="${q.id}"]:checked`);
+          if(!sel){ msg.textContent='Select an option'; msg.className='msg err'; return; }
+          const choiceIdx = Number(sel.value);
+          const payload = { kind:'quiz', qid:q.id, question:q.text, choice_index: choiceIdx, choice_text: q.choices[choiceIdx], ts: new Date().toISOString() };
+          try{
+            const res = await fetch(`${origin}/call`,{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ student_id: sid, func_name: 'echo', args: [payload], trial: trial || undefined })});
+            if(!res.ok){ let t=''; try{ const d = await res.json(); t = typeof d.detail==='string'? d.detail: JSON.stringify(d.detail);}catch{ try{ t = await res.text(); }catch{} } throw new Error(t||`HTTP ${res.status}`); }
+            msg.textContent='Logged'; msg.className='msg ok';
+          }catch(e){ msg.textContent = e.message || String(e); msg.className='msg err'; }
+        };
+
+        qsEl.appendChild(wrap);
+      });
+    }
+    render();
+  </script>
+</body>
+</html>
+

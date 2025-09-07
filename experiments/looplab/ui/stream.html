@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>LoopLab • Log Stream</title>
+  <link rel="stylesheet" href="style/app.css" />
+  <style>
+    .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}
+    .log{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px}
+    .log .head{display:flex;gap:8px;align-items:center}
+    .log .fn{font-weight:700}
+    .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:#cbd5e1;word-break:break-word}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <a class="link" href="dashboard.html">← Back</a>
+      <div class="spacer"></div>
+      <span id="scope" class="badge">Scope</span>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">
+        <div class="field"><label>Student</label><input id="sid" class="input" placeholder="All"></div>
+        <div class="field"><label>Trial</label><input id="trial" class="input" placeholder="All"></div>
+        <div class="field"><label>Limit</label><input id="limit" class="input" type="number" value="100"></div>
+        <div class="field"><label>&nbsp;</label><button id="apply" class="btn">Apply</button></div>
+      </div>
+      <div class="msg" id="status"></div>
+    </div>
+
+    <div id="cards" class="cards"></div>
+  </div>
+
+  <script>
+    const origin=location.origin; const m=location.pathname.match(/\/exp\/([^\/]+)/); const exp=m?m[1]:null; document.getElementById('scope').textContent=`Scope: ${exp||'root'}`;
+    const api = (p)=> `${origin}${exp?`/exp/${exp}`:''}${p}`;
+
+    const cards = document.getElementById('cards');
+    const status = document.getElementById('status');
+    const sid = document.getElementById('sid');
+    const trial = document.getElementById('trial');
+    const limit = document.getElementById('limit');
+
+    async function fetchLogs(){
+      try{
+        const q = new URLSearchParams({ n: String(Math.max(1, Math.min(1000, Number(limit.value)||100))), order:'latest' });
+        if (sid.value.trim()) q.set('student_id', sid.value.trim());
+        if (trial.value.trim()) q.set('trial', trial.value.trim());
+        const r = await fetch(api(`/logs?${q.toString()}`));
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const d = await r.json();
+        return d.logs || [];
+      }catch(e){ status.textContent = (e && e.message) ? e.message : String(e); status.className='msg err'; return []; }
+    }
+
+    function render(logs){
+      cards.innerHTML='';
+      if(!logs.length){ status.textContent = 'No logs'; status.className='msg'; return; } else { status.textContent = `${logs.length} logs`; status.className='msg'; }
+      for(const row of logs){
+        const el = document.createElement('div'); el.className='log';
+        el.innerHTML = `
+          <div class="head">
+            <span class="pill">${new Date(row.ts).toLocaleTimeString()}</span>
+            <span class="pill">${row.student_id||''}</span>
+            <span class="pill">${row.experiment_name||''}</span>
+            <span class="fn">${row.func_name||''}</span>
+          </div>
+          <div class="mono" style="margin-top:6px">args: ${row.args_json||''}</div>
+          <div class="mono" style="margin-top:4px">result: ${row.result_json||''}</div>
+          <div class="mono err" style="margin-top:4px">${row.error? 'error: '+row.error: ''}</div>
+        `;
+        cards.appendChild(el);
+      }
+    }
+
+    document.getElementById('apply').onclick = async ()=>{ const logs = await fetchLogs(); render(logs); };
+    (async()=>{ const logs = await fetchLogs(); render(logs); })();
+  </script>
+</body>
+</html>
+
