@@ -1,6 +1,7 @@
 
 import requests
 import json
+import os
 
 class RPCError(Exception):
     """Base exception for RPC client errors."""
@@ -24,10 +25,16 @@ class RPCNotRegisteredError(RPCServerError):
 class RPCClient:
     """A client for the Classroom RPC Server."""
 
-    def __init__(self, server_url: str, student_id: str, experiment_name: str | None = None):
-        """Initializes the client with the server URL, student ID, and optional experiment name."""
+    def __init__(self, server_url: str, student_id: str, trial_name: str | None = None, experiment_name: str | None = None):
+        """Initializes the client with the server URL, student ID, and optional trial name.
+
+        'trial_name' replaces the older 'experiment_name' tag used to label runs.
+        For backward compatibility, if 'trial_name' is None and 'experiment_name' is provided,
+        it will be used.
+        """
         self.server_url = server_url.rstrip('/')
         self.student_id = student_id
+        self.trial_name = trial_name if trial_name is not None else experiment_name
         self.experiment_name = experiment_name
         self._function_cache = {}
         self._discover_functions()
@@ -35,7 +42,7 @@ class RPCClient:
     def _discover_functions(self):
         """Fetches the list of available functions from the server."""
         try:
-            response = requests.get(f"{self.server_url}/functions")
+            response = requests.get(f"{self.server_url}/functions", timeout=10)
             response.raise_for_status()  # Raise an exception for bad status codes
             self._function_cache = response.json()
         except requests.exceptions.RequestException as e:
@@ -58,10 +65,13 @@ class RPCClient:
                     "student_id": self.student_id,
                     "func_name": name,
                     "args": args,
-                    "experiment": self.experiment_name,
+                    # Preferred new key
+                    "trial": self.trial_name,
+                    # Explicit experiment context; must match the active experiment on the server
+                    "experiment_name": self.experiment_name,
                 }
                 try:
-                    response = requests.post(f"{self.server_url}/call", json=payload)
+                    response = requests.post(f"{self.server_url}/call", json=payload, timeout=15)
                 except requests.exceptions.RequestException as e:
                     raise RPCNetworkError(f"Network error calling '{name}': {e}") from e
 
@@ -145,7 +155,7 @@ class RPCClient:
         if student_id:
             params["student_id"] = student_id
         try:
-            resp = requests.get(f"{self.server_url}/logs", params=params)
+            resp = requests.get(f"{self.server_url}/logs", params=params, timeout=10)
         except requests.exceptions.RequestException as e:
             raise RPCNetworkError(f"Network error fetching logs: {e}") from e
         if not resp.ok:
@@ -242,11 +252,12 @@ class RPCClient:
 if __name__ == '__main__':
     SERVER_URL = "http://localhost:9000"
     STUDENT_ID = "s001"  # Make sure this student ID is registered on the server
-    EXPERIMENT = "bisection-demo"  # Optional experiment label
+    TRIAL = "bisection-demo"  # Optional run label (was 'experiment')
+    EXPERIMENT_NAME = os.environ.get('DEFAULT_EXPERIMENT', 'default')
 
     print(f"Initializing client for student '{STUDENT_ID}' at {SERVER_URL}\n")
     try:
-        client = RPCClient(server_url=SERVER_URL, student_id=STUDENT_ID, experiment_name=EXPERIMENT)
+        client = RPCClient(server_url=SERVER_URL, student_id=STUDENT_ID, trial_name=TRIAL, experiment_name=EXPERIMENT_NAME)
     except RPCError as e:
         print(f"Failed to initialize RPC client: {e}")
         raise

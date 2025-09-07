@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="style/main.css" />
+</head>
+<body class="page-centered">
+    <div class="dashboard-container">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:16px;">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <a href="/" class="btn">← Experiments</a>
+                <h1 style="margin:0;">Dashboard</h1>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+                <span class="badge" id="exp-scope">Scope: …</span>
+                <span class="badge" id="auth-badge">Auth: …</span>
+                <button id="login-btn" class="btn" title="Login for management actions">Login</button>
+                <button id="logout-btn" class="btn">Logout</button>
+            </div>
+        </div>
+        <div class="links-grid">
+            <a href="students.html" class="dashboard-link">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                Students
+            </a>
+            <a href="logs.html" class="dashboard-link">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 5h18v2H3V5zm0 6h18v2H3v-2zm0 6h18v2H3v-2z"/></svg>
+                Logs List
+            </a>
+            <a href="random.html" class="dashboard-link">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm10 0h8v8h-8v-8z"/></svg>
+                Random Actions
+            </a>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = window.location.origin;
+        const expMatch = window.location.pathname.match(/\/exp\/([^\/]+)/);
+        const expPrefix = expMatch ? `/exp/${expMatch[1]}` : '';
+        document.getElementById('exp-scope').textContent = `Scope: ${expMatch ? expMatch[1] : 'root'}`;
+
+        const authBadge = document.getElementById('auth-badge');
+        async function refreshAuth() {
+            try {
+                const resp = await fetch(`${API_BASE_URL}${expPrefix}/admin/ping`, { credentials: 'include' });
+                const loggedIn = resp.ok;
+                authBadge.textContent = loggedIn ? 'Auth: logged in' : 'Auth: logged out';
+                loginBtn.style.display = loggedIn ? 'none' : '';
+                logoutBtn.style.display = loggedIn ? '' : 'none';
+            } catch (e) {
+                authBadge.textContent = 'Auth: logged out';
+                loginBtn.style.display = '';
+                logoutBtn.style.display = 'none';
+            }
+        }
+
+        const loginBtn = document.getElementById('login-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+        loginBtn?.addEventListener('click', () => { window.location.href = 'login.html'; });
+        logoutBtn?.addEventListener('click', async () => {
+            try { await fetch(`${API_BASE_URL}${expPrefix}/admin/logout`, { method: 'POST', credentials: 'include' }); } catch (e) {}
+            await refreshAuth();
+        });
+
+        document.addEventListener('DOMContentLoaded', refreshAuth);
+    </script>
+</body>
+</html>

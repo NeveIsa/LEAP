@@ -5,10 +5,12 @@ sys.path.append("client")
 
 from client import RPCClient, RPCError
 from fire import Fire
+import os
 
 SERVER_URL = "http://localhost:9000"
 STUDENT_ID = "s001" # Change to your assigned ID
-EXPERIMENT = "eigen"
+TRIAL = "eigen"
+EXPERIMENT_NAME = os.environ.get('DEFAULT_EXPERIMENT', 'default')
 
 def powerMethod(A, maxIterations = 1000, tol = 1e-10):
     n = 2 #finding the number of rows within the matrix
@@ -45,7 +47,7 @@ def deflation(A, lam, v):
 
 
 if __name__ == "__main__":
-    client = RPCClient(server_url=SERVER_URL, student_id=STUDENT_ID, experiment_name=EXPERIMENT)
+    client = RPCClient(server_url=SERVER_URL, student_id=STUDENT_ID, trial_name=TRIAL, experiment_name=EXPERIMENT_NAME)
 
 
     k, v1 = powerMethod(client.linear)
@@ -57,4 +59,3 @@ if __name__ == "__main__":
     u, v2 = powerMethod(B)
     print("Eigenvalue 2: ", u)
     print("Eigenvector 2: ", v2)
-

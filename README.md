@@ -60,9 +60,34 @@ Start the FastAPI server from the repository root (recommended):
 uvicorn server.rpc_server:app --host 0.0.0.0 --port 9000
 ```
 
-The server loads instructor functions from `./funcs` by default. You can override this with `FUNCTIONS_DIR=/path/to/dir`.
+Root APIs bind to a default experiment (preferred name: `experiments/default`).
+You can select which experiment powers the root endpoints via `DEFAULT_EXPERIMENT`.
 
-The server is now running and listening on port 9000.
+Examples:
+
+```
+# Use the renamed default experiment directory
+export DEFAULT_EXPERIMENT=default
+
+# or, fall back to the legacy name
+export DEFAULT_EXPERIMENT=default_experiment
+```
+
+Endpoints at root now include: `/functions`, `/call`, `/logs`, `/log-options`, and admin endpoints under `/admin/*`.
+Per-experiment apps stay available under `/exp/<experiment>/...`.
+
+Dynamic experiments
+-------------------
+- You can add new experiment folders under `experiments/<name>` at any time. Each experiment must have this structure:
+  - `db/students.db` (created on first run),
+  - `funcs/*.py` (instructor functions),
+  - `ui/` (HTML dashboard/pages),
+  - `admin_credentials.json` (experiment’s admin login).
+- Launching a new experiment from the landing page mounts it dynamically without restarting the server.
+
+Health
+------
+- Check server health and status: `GET /api/health` → `{ ok, active, version }`.
 
 ### 4. Register a Student
 
@@ -94,17 +119,17 @@ The `client/client.py` file contains an example of how a student would interact 
 python client/client.py
 ```
 
-### 6. View the Dashboard
+### 7. View the Dashboard
 
-- Admin UI: open `http://localhost:9000/ui/login.html`, then use the Dashboard to access Student Management and Log Visualization.
-- Log Visualization: `ui/viz/lineplot.html` renders the last 100 logs using uPlot. Series are colored by student. It uses the public endpoint `GET /logs`.
+- Admin UI: open `http://localhost:9000/ui/login.html`, then use the Dashboard to access Student Management and Log Visualization. When launching from the landing page, experiment-specific UIs live under `/exp/<experiment>/ui/...` and automatically scope API calls to that experiment.
+
 - Optional Marimo demo: there is a stub at `server/demo.py` you can open with `marimo edit server/demo.py`. If you use it, ensure it connects to the correct DB path (`db/students.db`).
 
 ## How It Works
 
 ### For Instructors: Adding New Functions
 
-Place Python files with public functions in the repository-level `funcs/` folder (default). Any function that does not start with an underscore `_` is automatically loaded by the server on startup and exposed to clients. You can change the folder with the `FUNCTIONS_DIR` environment variable.
+Place Python files with public functions in the `experiments/<experiment_name>/funcs/` folder. Any function that does not start with an underscore `_` is automatically loaded by the server on startup and exposed to clients. You can change the folder with the `FUNCTIONS_DIR` environment variable.
 
 **Example:** Adding a simple cubic function to `funcs/functions.py`.
 
@@ -120,7 +145,7 @@ def cubic(x: float) -> float:
 
 Students can use the `client/client.py` script as a template. They need to:
 1.  Set their `STUDENT_ID` at the top of the script.
-2.  Optionally set an `EXPERIMENT` name to tag their calls (e.g., "bisection-demo").
+2.  Optionally set a `TRIAL` name/ID to tag their calls (e.g., "bisection-demo").
 3.  Use the `client` object to call any of the functions provided by the instructor.
 4.  The `client.help()` method can be used to list all available functions and their signatures.
 
@@ -129,14 +154,14 @@ Students can use the `client/client.py` script as a template. They need to:
 
 SERVER_URL = "http://localhost:9000"
 STUDENT_ID = "s001" # Change to your assigned ID
-EXPERIMENT = "bisection-demo"  # Optional experiment label
+TRIAL = "bisection-demo"  # Optional trial label (was called 'experiment')
 
-client = RPCClient(server_url=SERVER_URL, student_id=STUDENT_ID, experiment_name=EXPERIMENT)
+client = RPCClient(server_url=SERVER_URL, student_id=STUDENT_ID, trial_name=TRIAL)
 
 # Get a list of available functions
 client.help()
 
-# Call a function (raises on error). Each call is logged with student_id and experiment.
+# Call a function (raises on error). Each call is logged with student_id and trial. The client also sends the experiment context name; the server validates it matches the currently active experiment.
 try:
     result = client.square(7)
     print(f"Result: {result}")
@@ -144,5 +169,7 @@ except Exception as e:
     print(f"RPC error: {e}")
 ```
 
-The client raises exceptions on failures (network/server/protocol) using `RPCError` subtypes. Logs now include `student_id` and `experiment_name` for each call.
+The client raises exceptions on failures (network/server/protocol) using `RPCError` subtypes. Logs include `student_id` and a `trial` tag (stored under `experiment_name` in the DB for compatibility).
+
+Compatibility note: The server still accepts the deprecated `experiment` parameter on `/call` and log filters; prefer the new `trial`/`trial_name` parameters going forward.
 ```

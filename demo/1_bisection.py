@@ -4,10 +4,12 @@ sys.path.append("client")
 
 from client import RPCClient, RPCError
 from fire import Fire
+import os
 
 SERVER_URL = "http://localhost:9000"
 STUDENT_ID = "s001" # Change to your assigned ID
-EXPERIMENT = "bisection-demo"
+TRIAL = "bisection-demo"
+EXPERIMENT_NAME = os.environ.get('DEFAULT_EXPERIMENT', 'default')
 
 def bisection(fn, a, b, xtol=1e-6):
     if fn(a)*fn(b) > 0:
@@ -38,7 +40,7 @@ def square(x):
 
 def main(a,b):
     try:
-        client = RPCClient(server_url=SERVER_URL, student_id=STUDENT_ID, experiment_name=EXPERIMENT)
+        client = RPCClient(server_url=SERVER_URL, student_id=STUDENT_ID, trial_name=TRIAL, experiment_name=EXPERIMENT_NAME)
     except RPCError as e:
         print(f"Failed to initialize RPC client: {e}")
         return

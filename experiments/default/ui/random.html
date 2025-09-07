@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>Random Actions</title>
   <link rel="stylesheet" href="style/main.css" />
   <style>
@@ -20,6 +23,11 @@
 </head>
 <body>
   <div class="container">
+    <div class="toolbar" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+      <a href="dashboard.html">← Back</a>
+      <div style="flex:1"></div>
+      <span class="badge" id="exp-scope">Scope: …</span>
+    </div>
     <h1>Random Actions</h1>
     <div class="controls">
       <div class="field">
@@ -27,8 +35,12 @@
         <input id="studentId" type="text" placeholder="e.g. s001" />
       </div>
       <div class="field">
-        <label for="experiment">Experiment Name</label>
-        <input id="experiment" type="text" placeholder="e.g. coin-experiment" />
+        <label for="experimentName">Experiment Name</label>
+        <input id="experimentName" type="text" placeholder="auto-detected (e.g. default)" disabled />
+      </div>
+      <div class="field">
+        <label for="trial">Trial Name / ID</label>
+        <input id="trial" type="text" placeholder="e.g. trial-001" />
       </div>
       
     </div>
@@ -105,30 +117,63 @@
 
   <script>
     const sidEl = document.getElementById('studentId');
-    const expEl = document.getElementById('experiment');
+    const expScope = document.getElementById('exp-scope');
+    const expNameEl = document.getElementById('experimentName');
+    const trialEl = document.getElementById('trial');
 
-    // Restore persisted values
     sidEl.value = localStorage.getItem('rand.sid') || '';
-    expEl.value = localStorage.getItem('rand.exp') || '';
+    expNameEl.value = localStorage.getItem('rand.expName') || '';
+    // Trial is intentionally left empty for the student to fill
+    trialEl.value = '';
     sidEl.addEventListener('input', () => localStorage.setItem('rand.sid', sidEl.value.trim()));
-    expEl.addEventListener('input', () => localStorage.setItem('rand.exp', expEl.value.trim()));
+    expNameEl.addEventListener('input', () => localStorage.setItem('rand.expName', expNameEl.value.trim()));
+    trialEl.addEventListener('input', () => localStorage.setItem('rand.trial', trialEl.value.trim()));
+
+    // Autofill experiment name field:
+    // 1) If URL is under /exp/<name>/..., use that name.
+    // 2) Else, if not set yet, query active experiment from server.
+    (async () => {
+      try {
+        const m = window.location.pathname.match(/\/exp\/([^\/]+)/);
+        if (m && m[1]) {
+          if (!expNameEl.value) {
+            expNameEl.value = m[1];
+            localStorage.setItem('rand.expName', expNameEl.value.trim());
+          }
+          return;
+        }
+        if (!expNameEl.value) {
+          const res = await fetch(`${window.location.origin}/api/active-experiment`).catch(() => null);
+          if (res && res.ok) {
+            const data = await res.json();
+            if (data && data.active && !expNameEl.value) {
+              expNameEl.value = data.active;
+              localStorage.setItem('rand.expName', expNameEl.value.trim());
+            }
+          }
+        }
+      } catch (_) { /* ignore */ }
+    })();
 
     function baseUrl() {
-      return window.location.origin;
+      const origin = window.location.origin;
+      const m = window.location.pathname.match(/\/exp\/([^\/]+)/);
+      return m ? `${origin}/exp/${m[1]}` : origin;
     }
+    // Set scope badge
+    (function(){
+      const m = window.location.pathname.match(/\/exp\/([^\/]+)/);
+      if (expScope) expScope.textContent = `Scope: ${m ? m[1] : 'root'}`;
+    })();
 
-    // Random helpers
     function coin() { return Math.random() < 0.5 ? 'H' : 'T'; }
     function die() { return 1 + Math.floor(Math.random() * 6); }
     function u01() { return Math.random(); }
     function u2() { return [Math.random(), Math.random()]; }
-    // Uniforms over [-1, 1]
     function u_pm1() { return 2 * Math.random() - 1; }
     function u_pm2() { return [2 * Math.random() - 1, 2 * Math.random() - 1]; }
-    // Box-Muller transform to get two standard normal random numbers
     function boxMuller() {
       let u1 = 0, u2 = 0;
-      //Convert [0,1) to (0,1)
       while (u1 === 0) u1 = Math.random();
       while (u2 === 0) u2 = Math.random();
       const R = Math.sqrt(-2.0 * Math.log(u1));
@@ -145,15 +190,27 @@
     function ensureRequiredFields() {
       const sid = sidEl.value.trim();
       if (!sid) throw new Error('Please enter Student ID');
-      const exp = expEl.value.trim();
-      if (!exp) throw new Error('Please enter Experiment Name');
-      return { sid, exp };
+      const trial = trialEl.value.trim();
+      if (!trial) throw new Error('Please enter Trial Name/ID');
+      return { sid, trial };
     }
 
     async function sendResult(kind, value) {
-      const { sid, exp } = ensureRequiredFields();
+      const { sid, trial } = ensureRequiredFields();
       const payload = { kind, value, ts: nowIso() };
-      const body = { student_id: sid, func_name: 'echo', args: [payload], experiment: exp };
+      // Include experiment context for server-side validation (from the field or auto-detect)
+      let experiment_name = expNameEl.value.trim();
+      if (!experiment_name) {
+        const ctxMatch = window.location.pathname.match(/\/exp\/([^\/]+)/);
+        if (ctxMatch && ctxMatch[1]) experiment_name = ctxMatch[1];
+        if (!experiment_name) {
+          try {
+            const res = await fetch(`${window.location.origin}/api/active-experiment`);
+            if (res.ok) { const data = await res.json(); experiment_name = data.active || ''; }
+          } catch (_) {}
+        }
+      }
+      const body = { student_id: sid, func_name: 'echo', args: [payload], trial, experiment_name };
       const res = await fetch(`${baseUrl()}/call`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
       });

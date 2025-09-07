@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>Logs</title>
   <link rel="stylesheet" href="style/main.css" />
 </head>
@@ -11,6 +14,7 @@
     <header>
       <h1>Logs</h1>
       <span class="subtle">Last 100 entries</span>
+      <span class="badge" id="exp-scope" style="float:right">Scope: …</span>
     </header>
 
     <div class="toolbar" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
@@ -20,7 +24,7 @@
       <select id="studentSelect" class="input">
         <option value="">All</option>
       </select>
-      <label for="expSelect">Experiment:</label>
+      <label for="expSelect">Trial:</label>
       <select id="expSelect" class="input">
         <option value="">All</option>
       </select>
@@ -36,7 +40,7 @@
           <tr>
             <th>Time</th>
             <th>Student</th>
-            <th>Experiment</th>
+            <th>Trial</th>
             <th>Function</th>
             <th>Args</th>
             <th>Result</th>
@@ -52,6 +56,9 @@
 
   <script>
     const API_BASE_URL = window.location.origin;
+    const expMatch = window.location.pathname.match(/\/exp\/([^\/]+)/);
+    const expPrefix = expMatch ? `/exp/${expMatch[1]}` : '';
+
     const logBody = document.getElementById('logBody');
     const countBadge = document.getElementById('countBadge');
     const updatedBadge = document.getElementById('updatedBadge');
@@ -60,26 +67,27 @@
     const expSelect = document.getElementById('expSelect');
     const QS = new URLSearchParams(window.location.search);
     const QS_SID = QS.get('sid') || QS.get('student_id') || '';
-    const QS_EXP = QS.get('exp') || QS.get('experiment_name') || '';
+    const QS_EXP = QS.get('trial') || QS.get('trial_name') || QS.get('exp') || QS.get('experiment_name') || '';
+    document.getElementById('exp-scope').textContent = `Scope: ${expMatch ? expMatch[1] : 'root'}`;
 
     function setMsg(text) { msg.textContent = text || ''; }
 
-    function escapeHTML(str) {
-      return (str ?? '').toString().replace(/[&<>"]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[s]));
-    }
-
-    async function fetchLogs(studentId, experimentName) {
+    async function fetchLogs(studentId, experimentNameFilter) {
       try {
         const params = new URLSearchParams({ n: 100, order: 'latest' });
         if (studentId) params.set('student_id', studentId);
-        if (experimentName) params.set('experiment_name', experimentName);
-        const res = await fetch(`${API_BASE_URL}/admin/logs?${params.toString()}`);
+        if (experimentNameFilter) params.set('trial', experimentNameFilter);
+        const res = await fetch(`${API_BASE_URL}${expPrefix}/logs?${params.toString()}`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         return data.logs || [];
       } catch (e) {
         console.error('Fetch logs failed', e);
-        setMsg('Failed to fetch logs. Is the server running?');
+        if (String(e).includes('HTTP 409')) {
+          setMsg('No active experiment. Start one from the landing page.');
+        } else {
+          setMsg('Failed to fetch logs. Is the server running?');
+        }
         return [];
       }
     }
@@ -163,13 +171,11 @@
         refresh();
     });
     document.addEventListener('DOMContentLoaded', async () => {
-      // Populate dropdowns from recent logs
       const seedLogs = await fetchLogs('', '');
       const students = uniqueSorted(seedLogs.map(l => l.student_id));
       const exps = uniqueSorted(seedLogs.map(l => l.experiment_name));
       populateSelect(studentSelect, students);
       populateSelect(expSelect, exps);
-      // Apply query selections if present
       if (QS_SID) studentSelect.value = QS_SID;
       if (QS_EXP) expSelect.value = QS_EXP;
       refresh();

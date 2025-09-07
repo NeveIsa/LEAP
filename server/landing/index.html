@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Select an Experiment</title>
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <link rel="stylesheet" href="/static/style/main.css">
+    <style>
+        /* Override dashboard container centering for table content */
+        .dashboard-container table th,
+        .dashboard-container table td { text-align: left; }
+    </style>
+</head>
+<body class="page-centered">
+    <div class="dashboard-container">
+        <h1>Select an Experiment</h1>
+        <p>The following experiments are available. Only one can be active at a time.</p>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Experiment</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="exp-table-body">
+                    <!-- Populated by script -->
+                </tbody>
+            </table>
+        </div>
+        <div class="toolbar" style="margin-top:16px; display:flex; gap:10px; align-items:center;">
+            <span class="badge" id="active-badge">Active: …</span>
+            <button class="btn" id="refresh">Refresh</button>
+        </div>
+    </div>
+
+    <script>
+        async function fetchJSON(url, options={}) {
+            const res = await fetch(url, { credentials: 'include', ...options });
+            if (!res.ok) {
+                const err = new Error(`${res.status}`);
+                err.status = res.status;
+                try {
+                    err.detail = (await res.json()).detail;
+                } catch (_) {}
+                throw err;
+            }
+            return res.json();
+        }
+
+        async function refreshExperiments() {
+            const tbody = document.getElementById('exp-table-body');
+            const activeBadge = document.getElementById('active-badge');
+            tbody.innerHTML = '';
+            try {
+                const [experiments, activeObj] = await Promise.all([
+                    fetchJSON('/api/experiments'),
+                    fetchJSON('/api/active-experiment').catch(() => ({ active: null })),
+                ]);
+                const active = activeObj && typeof activeObj === 'object' ? activeObj.active : null;
+                activeBadge.textContent = `Active: ${active || 'none'}`;
+                if (!Array.isArray(experiments) || experiments.length === 0) {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `<td colspan="3" style="text-align:center;">No experiments found.</td>`;
+                    tbody.appendChild(tr);
+                    return;
+                }
+                for (const exp of experiments) {
+                    const tr = document.createElement('tr');
+                    const isActive = active === exp;
+                    const status = isActive ? '<span class="badge" style="color:#1a1a1a;background:#00f5d4;">Active</span>' : '';
+                    const buttonDisabled = (active && !isActive) ? 'disabled' : '';
+                    // Open UI should only be clickable when this experiment is active
+                    const linkDisabledAttr = (!isActive) ? 'aria-disabled="true" tabindex="-1" style="opacity:0.5;pointer-events:none;"' : '';
+                    const actionLabel = isActive ? 'Stop' : 'Launch';
+                    tr.innerHTML = `
+                        <td><strong>${exp}</strong></td>
+                        <td>${status}</td>
+                        <td>
+                            <button class="btn" data-exp="${exp}" data-action="${isActive ? 'stop' : 'start'}" ${buttonDisabled}>${actionLabel}</button>
+                            <a class="btn" href="/exp/${exp}/ui/dashboard.html" target="_blank" rel="noopener noreferrer" ${linkDisabledAttr}>Open UI</a>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                }
+            } catch (error) {
+                console.error('Error fetching experiments/active:', error);
+                tbody.innerHTML = `<tr><td colspan="3" style="color:red; text-align:center;">Could not load experiments. Is the server running?</td></tr>`;
+            }
+        }
+
+        async function handleAction(action, name, _retry=false) {
+            try {
+                if (action === 'start') {
+                    await fetchJSON('/api/experiments/start', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name })
+                    });
+                } else if (action === 'stop') {
+                    await fetchJSON('/api/experiments/stop', { method: 'POST' });
+                }
+                await refreshExperiments();
+            } catch (e) {
+                if (e && e.status === 401 && !_retry) {
+                    const ok = await showLoginModal(name);
+                    if (ok) return handleAction(action, name, true);
+                    return; // user canceled
+                }
+                alert(`Action failed: ${e.detail || e.message || e}`);
+            }
+        }
+
+        // --- Inline Login Modal ---
+        function showLoginModal(expName) {
+            return new Promise((resolve) => {
+                const modal = ensureLoginModal();
+                const form = modal.querySelector('form');
+                const btnClose = modal.querySelector('[data-close]');
+                const errBox = modal.querySelector('[data-error]');
+                errBox.textContent = '';
+                modal.style.display = 'flex';
+
+                const onClose = () => {
+                    cleanup();
+                    modal.style.display = 'none';
+                    resolve(false);
+                };
+                btnClose.onclick = onClose;
+                modal.onclick = (ev) => { if (ev.target === modal) onClose(); };
+
+                const onSubmit = async (ev) => {
+                    ev.preventDefault();
+                    errBox.textContent = '';
+                    const username = form.querySelector('input[name="username"]').value.trim();
+                    const password = form.querySelector('input[name="password"]').value.trim();
+                    try {
+                        // Authenticate against the target experiment's admin
+                        const loginUrl = expName ? `/exp/${expName}/admin/login` : '/admin/login';
+                        const res = await fetch(loginUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify({ username, password })
+                        });
+                        if (!res.ok) {
+                            let detail = 'Login failed';
+                            try { detail = (await res.json()).detail || detail; } catch {}
+                            errBox.textContent = detail;
+                            return;
+                        }
+                        cleanup();
+                        modal.style.display = 'none';
+                        resolve(true);
+                    } catch (err) {
+                        errBox.textContent = 'Network error. Try again.';
+                    }
+                };
+                form.addEventListener('submit', onSubmit);
+
+                function cleanup() {
+                    form.removeEventListener('submit', onSubmit);
+                    btnClose.onclick = null;
+                    modal.onclick = null;
+                }
+            });
+        }
+
+        function ensureLoginModal() {
+            let modal = document.getElementById('login-modal');
+            if (modal) return modal;
+            modal = document.createElement('div');
+            modal.id = 'login-modal';
+            modal.style.cssText = 'position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);z-index:1000;';
+            modal.innerHTML = `
+                <div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:20px;min-width:300px;max-width:90vw;">
+                    <h3 style="margin-top:0;color:#00f5d4;">Admin Login</h3>
+                    <form>
+                        <label>Username</label>
+                        <input type="text" name="username" value="admin" style="width:100%;margin-bottom:10px;" />
+                        <label>Password</label>
+                        <input type="password" name="password" value="password" style="width:100%;margin-bottom:10px;" />
+                        <div style="display:flex;gap:10px;justify-content:flex-end;align-items:center;margin-top:10px;">
+                            <span data-error style="color:#e74c3c;flex:1;text-align:left;font-size:13px;"></span>
+                            <button type="button" class="btn" data-close>Cancel</button>
+                            <button type="submit" class="btn">Login</button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            return modal;
+        }
+
+        document.addEventListener('DOMContentLoaded', refreshExperiments);
+        document.getElementById('refresh').addEventListener('click', refreshExperiments);
+        document.addEventListener('click', (ev) => {
+            const btn = ev.target.closest('button.btn[data-action][data-exp]');
+            if (!btn) return;
+            ev.preventDefault();
+            const action = btn.getAttribute('data-action');
+            const name = btn.getAttribute('data-exp');
+            handleAction(action, name);
+        });
+    </script>
+</body>
+</html>
