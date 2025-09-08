@@ -218,6 +218,21 @@ def create_experiment_app(experiment_name: str) -> FastAPI:
     ):
         return True
 
+    @app.get("/quiz-files")
+    def list_quiz_markdown_files():
+        """Return list of quiz markdown files located in the experiment's UI directory.
+        The client uses this to auto-populate available quizzes.
+        """
+        files = []
+        try:
+            for name in os.listdir(ui_dir):
+                if name.lower().endswith('.md'):
+                    files.append(name)
+        except Exception:
+            pass
+        files.sort()
+        return {"files": files}
+
     @app.post("/admin/reload-functions", dependencies=[Depends(is_admin_authenticated), Depends(_require_active_this_experiment)])
     def admin_reload_functions():
         count = reload_functions()
@@ -330,7 +345,7 @@ def create_experiment_app(experiment_name: str) -> FastAPI:
         student_id: Optional[str] = Query(None),
         experiment_name: Optional[str] = Query(None),
         trial: Optional[str] = Query(None),
-        n: int = Query(100, ge=1, le=1000),
+        n: int = Query(100, ge=1, le=10_000),
         order: Literal["latest", "earliest"] = Query("latest"),
     ):
         eff_trial = trial or experiment_name
@@ -345,7 +360,7 @@ def create_experiment_app(experiment_name: str) -> FastAPI:
         exp: Optional[str] = Query(None),
         trial: Optional[str] = Query(None),
         trial_name: Optional[str] = Query(None),
-        n: int = Query(100, ge=1, le=1000),
+        n: int = Query(100, ge=1, le=10_000),
         order: Literal["latest", "earliest"] = Query("latest"),
         start_time: Optional[datetime.datetime] = Query(None),
         end_time: Optional[datetime.datetime] = Query(None),
@@ -720,7 +735,7 @@ def root_get_server_logs(
     student_id: Optional[str] = Query(None),
     experiment_name: Optional[str] = Query(None),
     trial: Optional[str] = Query(None),
-    n: int = Query(100, ge=1, le=1000),
+    n: int = Query(100, ge=1, le=10_000),
     order: Literal["latest", "earliest"] = Query("latest"),
 ):
     storage = _get_active_storage()
@@ -742,7 +757,7 @@ def root_get_logs(
     exp: Optional[str] = Query(None),
     trial: Optional[str] = Query(None),
     trial_name: Optional[str] = Query(None),
-    n: int = Query(100, ge=1, le=1000),
+    n: int = Query(100, ge=1, le=10_000),
     order: Literal["latest", "earliest"] = Query("latest"),
     start_time: Optional[datetime.datetime] = Query(None),
     end_time: Optional[datetime.datetime] = Query(None),

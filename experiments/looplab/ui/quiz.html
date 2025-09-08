@@ -28,25 +28,23 @@
       <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">
         <div class="field"><label>Student ID</label><input id="sid" class="input" placeholder="e.g. s001"></div>
         <div class="field"><label>Trial (optional)</label><input id="trial" class="input" placeholder="e.g. quiz-01"></div>
+        <div class="field">
+          <label>Quiz File</label>
+          <select id="quizFile" class="input"></select>
+        </div>
         <div class="field"><label>&nbsp;</label><span id="reg" class="pill">—</span></div>
       </div>
-      <div class="msg">Answers are logged immediately when you submit.</div>
+      <div class="msg">Answers are logged immediately when you submit. Choose a quiz file from the dropdown.</div>
     </div>
 
     <div class="card" style="margin-bottom:12px">
       <div class="row">
-        <button id="statsBtn" class="btn">Show Answer Statistics</button>
-        <span id="statsStatus" class="msg" style="margin-left:10px;"></span>
-        <div class="spacer"></div>
-        <label class="row" style="gap:6px; font-size: 0.9em; opacity: 0.9">
-          <input id="dedupe" type="checkbox" checked>
-          <span>Deduplicate by student (latest)</span>
-        </label>
+        <button id="statsBtn" class="btn">Open Statistics</button>
+        <span class="msg">Opens stats page for the selected quiz</span>
       </div>
     </div>
 
     <div id="qs" class="stack"></div>
-    <div id="statsPanel" class="card" style="margin-top:12px; display:none"></div>
   </div>
 
   <script>
@@ -58,9 +56,7 @@
     const regEl = document.getElementById('reg');
     const api = (p)=> `${origin}${p}`;
     const statsBtn = document.getElementById('statsBtn');
-    const statsStatus = document.getElementById('statsStatus');
-    const statsPanel = document.getElementById('statsPanel');
-    const dedupeEl = document.getElementById('dedupe');
+    const quizFileSel = document.getElementById('quizFile');
 
     // Persist student id
     sidEl.value = localStorage.getItem('looplab.quiz.sid') || '';
@@ -72,13 +68,40 @@
     regEl.textContent = 'unknown';
 
     let QUESTIONS = [];
+    let QUIZ_FILE = 'questions.md';
+
+    async function loadQuizManifest(){
+      // Auto-detect quiz markdown files via server endpoint under this experiment
+      const listUrl = exp ? `${origin}/exp/${exp}/quiz-files` : 'quiz-files';
+      let files = [];
+      try {
+        const r = await fetch(listUrl, { cache: 'no-store' });
+        if (r.ok) {
+          const data = await r.json();
+          const arr = (data && Array.isArray(data.files)) ? data.files : [];
+          files = arr.filter(x => typeof x === 'string' && x.toLowerCase().endsWith('.md'));
+        }
+      } catch {}
+      if (files.length === 0) files = ['questions.md'];
+      // Populate dropdown
+      quizFileSel.innerHTML = '';
+      for (const f of files) {
+        const opt = document.createElement('option');
+        opt.value = f; opt.textContent = f.replace(/\.md$/,'');
+        quizFileSel.appendChild(opt);
+      }
+      // Restore selection
+      const saved = localStorage.getItem('looplab.quiz.file');
+      if (saved && files.includes(saved)) quizFileSel.value = saved;
+      QUIZ_FILE = quizFileSel.value || files[0] || 'questions.md';
+    }
 
     // Parse markdown questions
     async function loadQuestions() {
       console.log('loadQuestions() called');
       try {
-        console.log('Fetching questions.md...');
-        const response = await fetch('questions.md');
+        console.log('Fetching', QUIZ_FILE, '...');
+        const response = await fetch(QUIZ_FILE, { cache: 'no-store' });
         console.log('Response status:', response.status, response.ok);
         
         if (!response.ok) {
@@ -202,7 +225,9 @@
           const sel = wrap.querySelector(`input[name="${q.id}"]:checked`);
           if(!sel){ msg.textContent='Select an option'; msg.className='msg err'; return; }
           const choiceIdx = Number(sel.value);
-          const payload = { kind:'quiz', qid:q.id, question:q.text, choice_index: choiceIdx, choice_text: q.choices[choiceIdx], ts: new Date().toISOString() };
+          // quizname = selected file without .md
+          const quizname = (QUIZ_FILE || '').replace(/\.md$/,'');
+          const payload = { kind:'quiz', quizname, qid:q.id, question:q.text, choice_index: choiceIdx, choice_text: q.choices[choiceIdx], ts: new Date().toISOString() };
           try{
             // Root /call requires experiment_name; verify against active
             let experiment_name = '';
@@ -222,7 +247,7 @@
       const trial = (trialEl.value || '').trim();
       if (trial) params.set('trial', trial);
       // Limit large responses for perf; adjust as needed
-      params.set('n', '1000');
+      params.set('n', '10000');
       params.set('order', 'latest');
       const url = api(`/logs?${params.toString()}`);
       const r = await fetch(url);
@@ -326,6 +351,7 @@
     (async () => {
       qsEl.innerHTML = '<div style="text-align:center;padding:20px;">Loading questions...</div>';
       try {
+        await loadQuizManifest();
         await loadQuestions();
         console.log('Loaded questions:', QUESTIONS);
         render();
@@ -335,6 +361,25 @@
         setTimeout(() => render(), 1000);
       }
     })();
+
+    // React to quiz file changes
+    quizFileSel.addEventListener('change', async ()=>{
+      QUIZ_FILE = quizFileSel.value || 'questions.md';
+      localStorage.setItem('looplab.quiz.file', QUIZ_FILE);
+      qsEl.innerHTML = '<div style="text-align:center;padding:20px;">Loading questions...</div>';
+      await loadQuestions();
+      render();
+    });
+
+    // Open stats page for the selected quiz file
+    statsBtn.addEventListener('click', ()=>{
+      const quizname = (QUIZ_FILE || '').replace(/\.md$/,'');
+      const trial = (trialEl.value||'').trim();
+      const url = new URL('quiz-stats.html', location.href);
+      url.searchParams.set('quiz', quizname);
+      if (trial) url.searchParams.set('trial', trial);
+      window.open(url.toString(), '_blank');
+    });
   </script>
 </body>
 </html>

@@ -295,7 +295,8 @@ class Storage:
             if conditions:
                 stmt = stmt.where(and_(*conditions))
 
-            stmt = stmt.order_by(desc(Log.ts) if order != "earliest" else asc(Log.ts)).limit(int(max(1, min(n, 1000))))
+            # Cap maximum rows returned to protect memory/latency. Increased to 10,000 per request.
+            stmt = stmt.order_by(desc(Log.ts) if order != "earliest" else asc(Log.ts)).limit(int(max(1, min(n, 10_000))))
 
             # Log the compiled SQL for debugging
             if logging.getLogger().hasHandlers():

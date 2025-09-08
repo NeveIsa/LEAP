@@ -288,6 +288,18 @@ def build_experiment_app(
     async def admin_ping():
         return {"ok": True}
 
+    @app.get("/quiz-files")
+    def list_quiz_markdown_files():
+        files = []
+        try:
+            for name in os.listdir(ui_dir):
+                if name.lower().endswith('.md'):
+                    files.append(name)
+        except Exception:
+            pass
+        files.sort()
+        return {"files": files}
+
     # Note: other per-experiment APIs are intentionally omitted to avoid tight coupling.
     # All client/admin operations (students/logs/call) are provided at root and scoped to the active experiment.
     return app
