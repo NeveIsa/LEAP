@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
+  <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
@@ -8,6 +8,9 @@
   <meta http-equiv="Expires" content="0">
   <title>LoopLab • Quiz Stats</title>
   <link rel="stylesheet" href="style/app.css" />
+  <!-- Markdown + Math + Code highlight for rendering titles -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css">
   <style>
     .table td,.table th{padding:6px 8px;border-bottom:1px solid var(--border)}
   </style>
@@ -40,6 +43,46 @@
         if (choices.length && correct >= 0) questions.push({ id, text, choices, correct });
       }
       return questions;
+    }
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markdown-it@13.0.2/dist/markdown-it.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markdown-it-katex@2.0.3/dist/markdown-it-katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/build/highlight.min.js"></script>
+  <script>
+    let _md = null;
+    if (window.markdownit) {
+      _md = window.markdownit({
+        html: false,
+        linkify: true,
+        typographer: true,
+        highlight: (str, lang) => {
+          try {
+            if (lang && window.hljs && window.hljs.getLanguage(lang)) {
+              return `<pre><code class=\"hljs language-${lang}\">` +
+                     window.hljs.highlight(str, { language: lang, ignoreIllegals: true }).value +
+                     '</code></pre>';
+            }
+          } catch {}
+          const esc = _md.utils.escapeHtml(str);
+          return `<pre><code class=\"hljs\">${esc}</code></pre>`;
+      }
+      });
+      if (window.markdownitKatex) {
+        try { _md = _md.use(window.markdownitKatex); } catch {}
+      }
+    }
+    function renderMD(s){
+      const txt = String(s || '');
+      if (_md) {
+        try { return DOMPurify.sanitize(_md.render(txt)); } catch {}
+      }
+      let html = txt
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      html = html.replace(/```([\s\S]*?)```/g, (m, code) => `<pre><code class=\"hljs\">${code.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</code></pre>`);
+      html = html.replace(/`([^`]+)`/g, (m, code) => `<code>${code.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</code>`);
+      return DOMPurify.sanitize(html);
     }
   </script>
 </head>
@@ -145,7 +188,11 @@
           if(Array.isArray(args) && args.length>0 && args[0] && args[0].kind==='quiz'){
             const p = args[0];
             if ((p.quizname||'') === name) {
-              ev.push({ ts: row.ts, student_id: row.student_id, qid: p.qid, choice_index: Number(p.choice_index), choice_text: p.choice_text, question: p.question });
+              if (Array.isArray(p.choice_indices)) {
+                ev.push({ ts: row.ts, student_id: row.student_id, qid: p.qid, choice_indices: p.choice_indices.map(Number), question: p.question });
+              } else {
+                ev.push({ ts: row.ts, student_id: row.student_id, qid: p.qid, choice_index: Number(p.choice_index), question: p.question });
+              }
             }
           }
         }catch{}
@@ -165,7 +212,12 @@
       for(const e of events){
         const qi = qIndex.get(e.qid); if(!qi) continue;
         const i = qi.idx;
-        if(Number.isFinite(e.choice_index) && e.choice_index>=0 && e.choice_index<counts[i].length){
+        if (Array.isArray(e.choice_indices)) {
+          // Multi-select: increment each selected choice; count one submission
+          const ids = e.choice_indices.filter(n => Number.isFinite(n) && n>=0 && n<counts[i].length);
+          for (const c of ids) counts[i][c]++;
+          totalPerQ[i]++;
+        } else if(Number.isFinite(e.choice_index) && e.choice_index>=0 && e.choice_index<counts[i].length){
           counts[i][e.choice_index]++; totalPerQ[i]++;
         }
       }
@@ -180,8 +232,8 @@
       questions.forEach((q,i)=>{
         const totals = counts[i] || []; const total = totalPerQ[i] || 0;
         const maxV = Math.max(1, ...totals);
-        const qtitle = q.text.length>90? q.text.slice(0,87)+'…': q.text;
-        html += `<div class="card" style="margin:8px 0; padding:10px"><div class="msg" style="margin-bottom:6px">${i+1}. ${qtitle}</div>`;
+        const titleHTML = renderMD(q.text);
+        html += `<div class="card" style="margin:8px 0; padding:10px"><div class="msg" style="margin-bottom:6px">${i+1}. ${titleHTML}</div>`;
         for(let j=0;j<q.choices.length;j++){
           const v = totals[j]||0; const pct = total? Math.round(100*v/total):0; const isC = (typeof q.correct==='number' && j===q.correct);
           html += `<div style="display:flex; align-items:center; gap:8px; margin:4px 0">

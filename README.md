@@ -85,7 +85,7 @@ Sample `/call` payload:
   - Student: `student_id` or `sid`
   - Trial tag: `trial` or `trial_name` (legacy: `experiment` or `exp`)
   - Time range: `start_time`, `end_time` (ISO 8601)
-  - Limit/order: `n` (1–1000), `order` = `latest` | `earliest`
+  - Limit/order: `n` (1–10,000), `order` = `latest` | `earliest`
 - Examples:
   - `curl 'http://localhost:9000/logs?sid=s001&trial=bisection-demo&n=50'`
   - `curl 'http://localhost:9000/exp/default/logs?start_time=2025-09-07T00:00:00Z&end_time=2025-09-07T02:00:00Z'`
@@ -108,6 +108,38 @@ def cubic(x: float) -> float:
 - Example client is in `client/client.py`.
 - Set `STUDENT_ID` and optionally `TRIAL`. Leave `EXPERIMENT_NAME=None` to auto‑detect active, or set explicitly.
 - Run with `python client/client.py`.
+
+## LoopLab Quizzes
+
+- Authoring
+  - Place quiz Markdown files under `experiments/looplab/ui/` (e.g., `questions.md`, `derivatives.md`).
+  - Question header: `## Question <num>: <id>` (e.g., `## Question 1: q1`).
+  - Prompt: first bold line is the question (e.g., `**Derivative of x^2**`).
+  - Choices and type:
+    - Single‑choice (radio): lines start with `A)`, `B)`, ...
+    - Multi‑choice (checkbox): lines start with `A]`, `B]`, ...
+    - Correct choices end with a trailing `✓`.
+  - Markdown in prompts/choices:
+    - Fenced code blocks (```lang) and inline code
+    - LaTeX math via `$...$` and `$$...$$`
+
+- Quiz page: `/exp/looplab/ui/quiz.html`
+  - Auto‑detects quiz files via `GET /exp/<experiment>/quiz-files` (with a local fallback probe).
+  - Dropdown to choose the quiz; per‑question submit logs an answer via `/call`.
+  - Registration pill checks `GET /is-registered?student_id=...`.
+  - Submissions include `quizname` (file name without `.md`).
+  - Payloads:
+    - Single: `{ kind:'quiz', type:'single', quizname, qid, question, choice_index, choice_text, ts }`
+    - Multi: `{ kind:'quiz', type:'multi', quizname, qid, question, choice_indices:[...], choice_texts:[...], ts }`
+
+- Stats page: `/exp/looplab/ui/quiz-stats.html?quiz=<name>[&trial=<trial>]`
+  - Charts‑only per‑question distributions; optional dedupe by latest per student.
+  - CSV export; truncation banner when exactly 10,000 logs are returned.
+
+- API additions
+  - `GET /exp/<experiment>/quiz-files` → `{ files: ["questions.md", ...] }`
+
+- Authoring guide: see `experiments/looplab/ui/QUIZ_AUTHORING.md`
 
 ## Notes & Tips
 
