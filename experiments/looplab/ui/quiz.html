@@ -37,10 +37,16 @@
       <div class="row">
         <button id="statsBtn" class="btn">Show Answer Statistics</button>
         <span id="statsStatus" class="msg" style="margin-left:10px;"></span>
+        <div class="spacer"></div>
+        <label class="row" style="gap:6px; font-size: 0.9em; opacity: 0.9">
+          <input id="dedupe" type="checkbox" checked>
+          <span>Deduplicate by student (latest)</span>
+        </label>
       </div>
     </div>
 
     <div id="qs" class="stack"></div>
+    <div id="statsPanel" class="card" style="margin-top:12px; display:none"></div>
   </div>
 
   <script>
@@ -51,6 +57,10 @@
     const trialEl = document.getElementById('trial');
     const regEl = document.getElementById('reg');
     const api = (p)=> `${origin}${p}`;
+    const statsBtn = document.getElementById('statsBtn');
+    const statsStatus = document.getElementById('statsStatus');
+    const statsPanel = document.getElementById('statsPanel');
+    const dedupeEl = document.getElementById('dedupe');
 
     // Persist student id
     sidEl.value = localStorage.getItem('looplab.quiz.sid') || '';
@@ -206,6 +216,112 @@
         qsEl.appendChild(wrap);
       });
     }
+
+    async function fetchQuizLogs() {
+      const params = new URLSearchParams();
+      const trial = (trialEl.value || '').trim();
+      if (trial) params.set('trial', trial);
+      // Limit large responses for perf; adjust as needed
+      params.set('n', '1000');
+      params.set('order', 'latest');
+      const url = api(`/logs?${params.toString()}`);
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`Failed to load logs: HTTP ${r.status}`);
+      const data = await r.json();
+      return Array.isArray(data.logs) ? data.logs : [];
+    }
+
+    function buildStats(logs) {
+      // Filter only quiz logs produced by echo([payload]) where payload.kind === 'quiz'
+      const quiz = [];
+      for (const row of logs) {
+        try {
+          const args = row.args_json; // already parsed by server
+          if (Array.isArray(args) && args.length > 0 && args[0] && args[0].kind === 'quiz') {
+            const p = args[0];
+            quiz.push({
+              ts: row.ts,
+              student_id: row.student_id,
+              qid: p.qid,
+              choice_index: Number(p.choice_index)
+            });
+          }
+        } catch {}
+      }
+
+      // Map question id -> per-choice counts
+      const qIndex = new Map(QUESTIONS.map((q, i) => [q.id, { idx: i, q }]))
+      const counts = QUESTIONS.map(q => Array(q.choices.length).fill(0));
+      const totalPerQ = QUESTIONS.map(_ => 0);
+
+      // Optionally dedupe by (student_id, qid) keeping latest
+      let events = quiz;
+      if (dedupeEl.checked) {
+        const latest = new Map(); // key -> event
+        for (const e of quiz) {
+          const key = `${e.qid}::${e.student_id}`;
+          const prev = latest.get(key);
+          if (!prev || e.ts > prev.ts) latest.set(key, e);
+        }
+        events = Array.from(latest.values());
+      }
+
+      for (const e of events) {
+        const qi = qIndex.get(e.qid);
+        if (!qi) continue;
+        const i = qi.idx;
+        if (Number.isFinite(e.choice_index) && e.choice_index >= 0 && e.choice_index < counts[i].length) {
+          counts[i][e.choice_index]++;
+          totalPerQ[i]++;
+        }
+      }
+
+      return { counts, totalPerQ };
+    }
+
+    function renderStats({ counts, totalPerQ }) {
+      const col = (s) => `<td style="padding:6px 8px; border-bottom:1px solid var(--border); text-align:center">${s}</td>`;
+      const head = (s) => `<th style="padding:6px 8px; border-bottom:1px solid var(--border); text-align:center; font-weight:600">${s}</th>`;
+      let html = '';
+      html += '<h3 style="margin:0 0 8px 0">Answer Statistics</h3>';
+      html += '<div class="msg" style="margin-bottom:8px">Distribution of answers per question' + (dedupeEl.checked? ' (deduped by student, latest)': '') + '.</div>';
+      html += '<div style="overflow:auto">';
+      html += '<table style="width:100%; border-collapse:collapse">';
+      html += '<thead><tr>' + head('#') + head('Question') + head('Total') + QUESTIONS[0].choices.map((_,i)=> head(String.fromCharCode(65+i))).join('') + head('Correct %') + '</tr></thead>';
+      html += '<tbody>';
+      QUESTIONS.forEach((q, i) => {
+        const totals = counts[i] || [];
+        const total = totalPerQ[i] || 0;
+        const correct = (typeof q.correct === 'number') ? (totals[q.correct] || 0) : 0;
+        const pct = total ? Math.round((100 * correct) / total) : 0;
+        const short = q.text.length > 80 ? q.text.slice(0,77) + '…' : q.text;
+        html += '<tr>'
+          + col(i+1)
+          + col(short)
+          + col(total)
+          + q.choices.map((_,j)=> col(totals[j] || 0)).join('')
+          + col(pct + '%')
+          + '</tr>';
+      });
+      html += '</tbody></table></div>';
+      statsPanel.innerHTML = html;
+      statsPanel.style.display = '';
+    }
+
+    async function showStats() {
+      statsStatus.textContent = 'Loading…'; statsStatus.className = 'msg';
+      try {
+        const logs = await fetchQuizLogs();
+        const data = buildStats(logs);
+        renderStats(data);
+        statsStatus.textContent = 'Updated'; statsStatus.className = 'msg ok';
+      } catch (e) {
+        statsStatus.textContent = e.message || String(e); statsStatus.className = 'msg err';
+        statsPanel.style.display = 'none';
+      }
+    }
+
+    statsBtn.addEventListener('click', showStats);
     // Initialize the quiz
     (async () => {
       qsEl.innerHTML = '<div style="text-align:center;padding:20px;">Loading questions...</div>';
