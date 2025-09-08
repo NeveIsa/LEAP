@@ -11,3 +11,17 @@ env/
 # Editor/OS junk
 .DS_Store
 Thumbs.db
+
+# Database files (SQLite, etc.)
+# Repo stores local DBs under experiments/*/db; ignore all DB artifacts
+experiments/**/db/
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-wal
+*.sqlite3-shm
