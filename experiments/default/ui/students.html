@@ -18,8 +18,9 @@
             <div class="toolbar" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
                 <a href="dashboard.html">← Back</a>
                 <div style="flex:1"></div>
-                <span class="badge" id="exp-scope">Scope: …</span>
+                <span class="badge" id="active-badge">Active: …</span>
             </div>
+            <div id="status-banner" style="display:none; margin: 6px 0 12px 0;"></div>
             <details class="collapsible">
                 <summary class="collapsible-summary">Bulk Upload (CSV)</summary>
                 <div class="content-section">
@@ -93,8 +94,13 @@
         const csvErrors = document.getElementById('csv-errors');
         const expScope = document.getElementById('exp-scope');
 
-        const getApiUrl = (path) => `${API_BASE_URL}${expPrefix}${path}`;
-        expScope.textContent = `Scope: ${expMatch ? expMatch[1] : 'root'}`;
+        const getApiUrl = (path) => `${API_BASE_URL}${path}`; // Use root endpoints (bound to active experiment)
+        if (expScope) expScope.remove();
+        let ACTIVE_NAME = null;
+        async function refreshActive(){
+            try{ const r=await fetch(`${API_BASE_URL}/api/active-experiment`); const d=await r.json(); ACTIVE_NAME = d.active || null; document.getElementById('active-badge').textContent = `Active: ${ACTIVE_NAME || 'none'}`; }
+            catch{ ACTIVE_NAME = null; document.getElementById('active-badge').textContent='Active: ?'; }
+        }
 
         // Show/hide admin sections based on auth
         let IS_ADMIN = false;
@@ -104,6 +110,21 @@
                 IS_ADMIN = resp.ok;
             } catch (_) { IS_ADMIN = false; }
             document.querySelectorAll('.collapsible').forEach(el => el.style.display = IS_ADMIN ? '' : 'none');
+        }
+
+        // Inline status banner helpers
+        const statusBanner = document.getElementById('status-banner');
+        function setBanner(text, type){
+            if (!statusBanner) return;
+            statusBanner.textContent = text;
+            statusBanner.className = `notification-message ${type}`;
+            statusBanner.style.display = 'block';
+        }
+        function clearBanner(){ if(statusBanner){ statusBanner.style.display='none'; statusBanner.textContent=''; } }
+        function updateBanner(){
+            if (!IS_ADMIN){ setBanner('Login required to add or view students. Click Login on the dashboard.', 'error'); return; }
+            if (!ACTIVE_NAME){ setBanner('No active experiment. Open the landing page and Launch one.', 'warning'); return; }
+            clearBanner();
         }
 
         const fetchStudents = async () => {
@@ -299,7 +320,7 @@
             setTimeout(() => { msgElement.style.opacity = '0'; setTimeout(() => { msgElement.remove(); }, 300); }, 4000);
         };
 
-        document.addEventListener('DOMContentLoaded', async () => { await checkAdmin(); await fetchStudents(); });
+        document.addEventListener('DOMContentLoaded', async () => { await refreshActive(); await checkAdmin(); updateBanner(); await fetchStudents(); });
         addStudentForm.addEventListener('submit', addStudent);
         studentTableBody.addEventListener('click', async (event) => {
             const t = event.target;
@@ -321,6 +342,7 @@
             }
         });
     </script>
+    <script src="scripts/theme.js"></script>
 
 </body>
 </html>

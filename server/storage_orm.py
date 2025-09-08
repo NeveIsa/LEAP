@@ -39,7 +39,10 @@ class Log(Base):
     id: Mapped[int] = mapped_column(Integer, log_id_seq, primary_key=True, server_default=log_id_seq.next_value())
     ts: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow, index=True, nullable=False)
     student_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    # True experiment id (e.g., "default", "looplab")
     experiment_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    # Trial/run label within an experiment
+    trial: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     func_name: Mapped[str] = mapped_column(String, index=True, nullable=False)
     args_json: Mapped[str] = mapped_column(Text, nullable=False)
     result_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -52,9 +55,9 @@ class Storage:
             db_dir = os.path.dirname(os.path.abspath(db_path))
             if db_dir and not os.path.isdir(db_dir):
                 os.makedirs(db_dir, exist_ok=True)
-        except Exception:
+        except Exception as e:
             # Non-fatal; connecting will still raise if path truly invalid
-            pass
+            logging.debug(f"Could not create database directory: {e}")
 
         # If a stale WAL exists from a previous DB instance, DuckDB may fail
         # to deserialize (e.g., version/format mismatch). Rename it aside
@@ -68,10 +71,10 @@ class Storage:
                     ts = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
                     bak_path = f"{wal_path}.bak.{ts}"
                 os.replace(wal_path, bak_path)
-                print(f"Warning: Detected WAL at '{wal_path}'. Renamed to '{bak_path}' to avoid deserialization issues.")
-        except Exception:
+                logging.warning("Detected WAL at '%s'. Renamed to '%s' to avoid deserialization issues.", wal_path, bak_path)
+        except Exception as e:
             # Non-fatal; proceed to attempt open regardless
-            pass
+            logging.debug(f"Could not handle WAL backup: {e}")
 
         self.engine = create_engine(f"duckdb:///{db_path}", future=True)
         self.SessionLocal = sessionmaker(bind=self.engine, expire_on_commit=False, future=True)
@@ -98,7 +101,7 @@ class Storage:
                         ts = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
                         bak = f"{db_path}.corrupt.{ts}"
                         os.replace(db_path, bak)
-                        print(f"Warning: DuckDB could not open DB (deserialize). Backed up to '{bak}' and reinitializing a fresh DB.")
+                        logging.warning("DuckDB could not open DB (deserialize). Backed up to '%s' and reinitializing a fresh DB.", bak)
                     wal = f"{db_path}.wal"
                     if wal and os.path.isfile(wal):
                         try:
@@ -113,23 +116,99 @@ class Storage:
                     raise
             else:
                 raise
-        # Basic migration: add experiment_name to logs if missing
+        # Basic migration: add columns if missing
         try:
             with self.engine.connect() as conn:
                 cols = conn.exec_driver_sql("PRAGMA table_info('logs')").fetchall()
                 names = {row[1] for row in cols} if cols else set()
                 if 'experiment_name' not in names:
                     conn.exec_driver_sql("ALTER TABLE logs ADD COLUMN experiment_name VARCHAR NULL")
+                if 'trial' not in names:
+                    conn.exec_driver_sql("ALTER TABLE logs ADD COLUMN trial VARCHAR NULL")
         except Exception:
             # Best-effort migration; ignore if PRAGMA not supported or other errors
             pass
 
     def add_student(self, student_id: str, name: str, email: Optional[str] = None) -> None:
-        """Idempotent insert of a student."""
+        """Idempotent insert of a student using proper UPSERT to prevent race conditions."""
         with self.SessionLocal() as s:
-            if not s.get(Student, student_id):
-                s.add(Student(student_id=student_id, name=name, email=email))
+            try:
+                # Try to insert new student
+                new_student = Student(student_id=student_id, name=name, email=email)
+                s.add(new_student)
                 s.commit()
+                logging.debug(f"Added new student: {student_id}")
+            except Exception as e:
+                s.rollback()
+                # Check if student already exists (likely cause of constraint violation)
+                existing = s.get(Student, student_id)
+                if existing:
+                    logging.debug(f"Student {student_id} already exists, skipping insert")
+                    return  # Student exists, which is fine
+                else:
+                    # Some other error occurred
+                    logging.error(f"Failed to add student {student_id}: {e}")
+                    raise
+
+    def add_students_bulk(self, students: List[Dict[str, str]]) -> Dict[str, Any]:
+        """Bulk insert students efficiently, skipping duplicates."""
+        added_count = 0
+        skipped_count = 0
+        errors = []
+        
+        with self.SessionLocal() as s:
+            # Get existing student IDs to avoid conflicts
+            existing_ids = set()
+            try:
+                existing_students = s.execute(select(Student.student_id)).scalars().all()
+                existing_ids = set(existing_students)
+            except Exception as e:
+                logging.warning(f"Could not check existing students: {e}")
+            
+            # Filter out students that already exist
+            new_students = []
+            for student_data in students:
+                student_id = student_data.get('student_id', '').strip()
+                if not student_id:
+                    errors.append("Missing or empty student_id")
+                    continue
+                
+                if student_id in existing_ids:
+                    skipped_count += 1
+                    continue
+                
+                new_students.append(Student(
+                    student_id=student_id,
+                    name=student_data.get('name', '').strip(),
+                    email=student_data.get('email', '').strip() or None
+                ))
+            
+            # Bulk insert new students
+            if new_students:
+                try:
+                    s.add_all(new_students)
+                    s.commit()
+                    added_count = len(new_students)
+                    logging.info(f"Bulk added {added_count} students")
+                except Exception as e:
+                    s.rollback()
+                    # Fallback to individual inserts if bulk fails
+                    logging.warning(f"Bulk insert failed, falling back to individual inserts: {e}")
+                    for student in new_students:
+                        try:
+                            s.add(student)
+                            s.commit()
+                            added_count += 1
+                        except Exception as individual_error:
+                            s.rollback()
+                            errors.append(f"Failed to add {student.student_id}: {individual_error}")
+        
+        return {
+            "added": added_count,
+            "skipped": skipped_count,
+            "errors": errors,
+            "total_processed": len(students)
+        }
 
     def student_exists(self, student_id: str) -> bool:
         with self.SessionLocal() as s:
@@ -139,7 +218,7 @@ class Storage:
         """Returns a list of all registered students."""
         with self.SessionLocal() as s:
             students = s.execute(select(Student).order_by(Student.student_id)).scalars().all()
-            print(f"Found {len(students)} students in the database.")
+            logging.info(f"Found {len(students)} students in the database.")
             return [
                 {"student_id": s.student_id, "name": s.name, "email": s.email}
                 for s in students
@@ -158,9 +237,17 @@ class Storage:
                 return True
             return False
 
-    def log_event(self, *, student_id: str, experiment_name: Optional[str], func_name: str, args_json: str, result_json: Optional[str], error: Optional[str]) -> None:
+    def delete_logs_by_student(self, student_id: str) -> int:
+        """Deletes all logs for a given student_id. Returns number of rows deleted."""
         with self.SessionLocal() as s:
-            s.add(Log(student_id=student_id, experiment_name=experiment_name, func_name=func_name, args_json=args_json, result_json=result_json, error=error))
+            res = s.execute(delete(Log).where(Log.student_id == student_id))
+            s.commit()
+            # SQLAlchemy 2.0: result.rowcount may be None for some dialects; coerce to int
+            return int(res.rowcount or 0)
+
+    def log_event(self, *, student_id: str, experiment_name: Optional[str], trial: Optional[str], func_name: str, args_json: str, result_json: Optional[str], error: Optional[str]) -> None:
+        with self.SessionLocal() as s:
+            s.add(Log(student_id=student_id, experiment_name=experiment_name, trial=trial, func_name=func_name, args_json=args_json, result_json=result_json, error=error))
             try:
                 s.commit()
             except Exception as e:
@@ -170,7 +257,7 @@ class Storage:
                 if "experiment_name" in msg and "does not have a column" in msg:
                     try:
                         self.init_db()
-                        s.add(Log(student_id=student_id, experiment_name=experiment_name, func_name=func_name, args_json=args_json, result_json=result_json, error=error))
+                        s.add(Log(student_id=student_id, experiment_name=experiment_name, trial=trial, func_name=func_name, args_json=args_json, result_json=result_json, error=error))
                         s.commit()
                         return
                     except Exception:
@@ -183,6 +270,7 @@ class Storage:
         *,
         student_id: Optional[str] = None,
         experiment_name: Optional[str] = None,
+        trial: Optional[str] = None,
         n: int = 100,
         order: str = "latest",
         start_time: Optional[datetime.datetime] = None,
@@ -197,6 +285,8 @@ class Storage:
                 conditions.append(Log.student_id == student_id)
             if experiment_name:
                 conditions.append(Log.experiment_name == experiment_name)
+            if trial:
+                conditions.append(Log.trial == trial)
             if start_time:
                 conditions.append(Log.ts >= start_time)
             if end_time:
@@ -236,6 +326,7 @@ class Storage:
                     "ts": _iso_ts(r.ts),
                     "student_id": r.student_id,
                     "experiment_name": r.experiment_name,
+                    "trial": r.trial,
                     "func_name": r.func_name,
                     "args_json": _try_parse_json(r.args_json),
                     "result_json": _try_parse_json(r.result_json),
@@ -251,7 +342,7 @@ class Storage:
             return [r[0] for r in rows if r and r[0]]
 
     def distinct_experiments(self) -> List[str]:
-        """Return distinct non-null experiment_name values from logs, sorted."""
+        """Return distinct non-null trial values from logs (compat as 'experiments')."""
         with self.SessionLocal() as s:
-            rows = s.execute(select(distinct(Log.experiment_name)).where(Log.experiment_name.is_not(None)).order_by(asc(Log.experiment_name))).all()
+            rows = s.execute(select(distinct(Log.trial)).where(Log.trial.is_not(None)).order_by(asc(Log.trial))).all()
             return [r[0] for r in rows if r and r[0]]

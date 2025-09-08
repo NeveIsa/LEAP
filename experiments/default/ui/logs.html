@@ -14,7 +14,7 @@
     <header>
       <h1>Logs</h1>
       <span class="subtle">Last 100 entries</span>
-      <span class="badge" id="exp-scope" style="float:right">Scope: …</span>
+      <span class="badge" id="active-badge" style="float:right;margin-left:6px">Active: …</span>
     </header>
 
     <div class="toolbar" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
@@ -57,7 +57,6 @@
   <script>
     const API_BASE_URL = window.location.origin;
     const expMatch = window.location.pathname.match(/\/exp\/([^\/]+)/);
-    const expPrefix = expMatch ? `/exp/${expMatch[1]}` : '';
 
     const logBody = document.getElementById('logBody');
     const countBadge = document.getElementById('countBadge');
@@ -68,7 +67,7 @@
     const QS = new URLSearchParams(window.location.search);
     const QS_SID = QS.get('sid') || QS.get('student_id') || '';
     const QS_EXP = QS.get('trial') || QS.get('trial_name') || QS.get('exp') || QS.get('experiment_name') || '';
-    document.getElementById('exp-scope').textContent = `Scope: ${expMatch ? expMatch[1] : 'root'}`;
+    // Scope badge removed; rely on Active badge only.
 
     function setMsg(text) { msg.textContent = text || ''; }
 
@@ -77,7 +76,7 @@
         const params = new URLSearchParams({ n: 100, order: 'latest' });
         if (studentId) params.set('student_id', studentId);
         if (experimentNameFilter) params.set('trial', experimentNameFilter);
-        const res = await fetch(`${API_BASE_URL}${expPrefix}/logs?${params.toString()}`);
+        const res = await fetch(`${API_BASE_URL}/logs?${params.toString()}`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         return data.logs || [];
@@ -127,7 +126,7 @@
         const tds = [
           new Date(row.ts).toLocaleString([], { hour12: false, year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short' }),
           row.student_id || '',
-          row.experiment_name || '',
+          (row.trial || row.experiment_name || ''),
           row.func_name || '',
           row.args_json || '',
           row.result_json || '',
@@ -170,10 +169,19 @@
         expSelect.value = '';
         refresh();
     });
+    async function refreshActive() {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/active-experiment`);
+        const data = await res.json();
+        document.getElementById('active-badge').textContent = `Active: ${data.active || 'none'}`;
+      } catch { document.getElementById('active-badge').textContent = 'Active: ?'; }
+    }
+
     document.addEventListener('DOMContentLoaded', async () => {
+      refreshActive();
       const seedLogs = await fetchLogs('', '');
       const students = uniqueSorted(seedLogs.map(l => l.student_id));
-      const exps = uniqueSorted(seedLogs.map(l => l.experiment_name));
+      const exps = uniqueSorted(seedLogs.map(l => l.trial || l.experiment_name));
       populateSelect(studentSelect, students);
       populateSelect(expSelect, exps);
       if (QS_SID) studentSelect.value = QS_SID;
@@ -181,5 +189,6 @@
       refresh();
     });
   </script>
+  <script src="scripts/theme.js"></script>
 </body>
 </html>

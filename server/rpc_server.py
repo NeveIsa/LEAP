@@ -1,14 +1,18 @@
 
 # rpc_server.py
-from fastapi import FastAPI, HTTPException, Query, Depends, status, Request, Response
+from fastapi import FastAPI, HTTPException, Query, Depends, status, Request, Response, Body
+import logging
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.encoders import jsonable_encoder
-from pydantic import BaseModel
-from typing import Any, Callable, Dict, Optional, Literal
+from pydantic import BaseModel, validator, Field
+from typing import Any, Callable, Dict, List, Optional, Literal
+import re
 from starlette.middleware.sessions import SessionMiddleware
 import secrets
+import inspect
 import json
 import os
 import sys
@@ -16,50 +20,103 @@ import datetime
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from storage_orm import Storage
-from .utils import (
-    enc as _enc,
-    resolve_log_filters as _resolve_log_filters,
-    load_functions_from_directory as _load_functions_from_directory,
-    load_admin_credentials as _load_admin_credentials_from_path,
-    NoCacheHTMLMiddleware,
-    build_experiment_app,
-)
+try:
+    from .storage_orm import Storage  # when imported as package (server.rpc_server)
+    from .utils import (
+        enc as _enc,
+        resolve_log_filters as _resolve_log_filters,
+        load_functions_from_directory as _load_functions_from_directory,
+        load_admin_credentials as _load_admin_credentials_from_path,
+        NoCacheHTMLMiddleware,
+        build_experiment_app,
+    )
+except ImportError:  # pragma: no cover
+    from storage_orm import Storage  # when executed as script
+    from utils import (
+        enc as _enc,
+        resolve_log_filters as _resolve_log_filters,
+        load_functions_from_directory as _load_functions_from_directory,
+        load_admin_credentials as _load_admin_credentials_from_path,
+        NoCacheHTMLMiddleware,
+        build_experiment_app,
+    )
 
 _current_dir = os.path.dirname(os.path.abspath(__file__))
 _project_root = os.path.dirname(_current_dir)
 APP_VERSION = "0.1.0"
 
+# Security validation utilities
+def _validate_safe_string(value: str, max_length: int = 255, allow_empty: bool = False) -> str:
+    """Validate that string inputs are safe and reasonable."""
+    if not allow_empty and not value:
+        raise ValueError("Value cannot be empty")
+    if len(value) > max_length:
+        raise ValueError(f"Value too long (max {max_length} characters)")
+    # Check for basic injection patterns
+    dangerous_patterns = [
+        r'[;<>&|`$]',  # Shell metacharacters
+        r'__[a-zA-Z_]+__',  # Python dunder methods
+        r'eval|exec|import|__import__|open|file',  # Dangerous Python keywords
+    ]
+    for pattern in dangerous_patterns:
+        if re.search(pattern, value, re.IGNORECASE):
+            raise ValueError(f"Invalid characters or patterns detected")
+    return value
+
+def _validate_function_args(args: list[Any], max_args: int = 10, max_depth: int = 5) -> list[Any]:
+    """Validate function arguments for safety."""
+    if len(args) > max_args:
+        raise ValueError(f"Too many arguments (max {max_args})")
+    
+    def check_value(obj, depth=0):
+        if depth > max_depth:
+            raise ValueError("Nested data too deep")
+        if isinstance(obj, str):
+            if len(obj) > 10000:  # Prevent extremely long strings
+                raise ValueError("String argument too long")
+        elif isinstance(obj, (list, tuple)):
+            if len(obj) > 1000:  # Prevent huge lists
+                raise ValueError("List argument too long")
+            for item in obj:
+                check_value(item, depth + 1)
+        elif isinstance(obj, dict):
+            if len(obj) > 100:  # Prevent huge dicts
+                raise ValueError("Dict argument too large")
+            for key, value in obj.items():
+                check_value(key, depth + 1)
+                check_value(value, depth + 1)
+        elif obj is not None and not isinstance(obj, (int, float, bool)):
+            raise ValueError(f"Unsupported argument type: {type(obj)}")
+    
+    for arg in args:
+        check_value(arg)
+    return args
+
 # Use a single session secret across root and mounted experiment apps
-SESSION_SECRET_KEY = os.environ.get("SESSION_SECRET_KEY", "super-secret-key-please-change-me-in-prod")
+def _get_session_secret() -> str:
+    """Get session secret from environment or generate secure default."""
+    env_secret = os.environ.get("SESSION_SECRET_KEY")
+    if env_secret:
+        return env_secret
+    
+    # Generate cryptographically secure secret for development
+    secure_default = secrets.token_hex(32)  # 256-bit key
+    print("🔐 Generated secure session secret for this session.")
+    print("⚠️  For production, set SESSION_SECRET_KEY environment variable!")
+    return secure_default
+
+SESSION_SECRET_KEY = _get_session_secret()
 # Rotate runtime secret each start to invalidate old sessions
 _STARTUP_NONCE = secrets.token_hex(16)
 _DERIVED_SESSION_SECRET = f"{SESSION_SECRET_KEY}:{_STARTUP_NONCE}"
-print("Session secret rotated at startup; previous sessions invalidated.")
+logging.info("Session secret rotated at startup; previous sessions invalidated.")
 SESSION_KW = dict(max_age=7*24*3600, same_site="lax", https_only=False, path="/")
-_ACTIVE_EXPERIMENT: Optional[str] = None
-_mounted_experiments: set[str] = set()
 
-def _enc(obj: Any) -> str:
-    """Best-effort JSON encoding for logging."""
-    try:
-        return json.dumps(jsonable_encoder(obj))
-    except Exception:
-        try:
-            return json.dumps(repr(obj))
-        except Exception:
-            return 'null'
+# Import state management
+from .state import server_state as _server_state
 
-def _resolve_log_filters(
-    *,
-    student_id: Optional[str], sid: Optional[str],
-    experiment_name: Optional[str], exp: Optional[str],
-    trial: Optional[str], trial_name: Optional[str],
-) -> tuple[Optional[str], Optional[str]]:
-    """Resolve query params for logs into effective student and trial."""
-    eff_student = student_id or sid
-    eff_trial = trial or trial_name or experiment_name or exp
-    return eff_student, eff_trial
+# Import shared utilities instead of duplicating
+from .utils import enc as _enc, resolve_log_filters as _resolve_log_filters
 
 def _invoke_and_log(
     *, storage: Storage, fn: Callable[..., Any], func_name: str,
@@ -70,7 +127,8 @@ def _invoke_and_log(
         result = fn(*args)
         storage.log_event(
             student_id=student_id,
-            experiment_name=trial,
+            experiment_name=_server_state.get_active_experiment(),
+            trial=trial,
             func_name=func_name,
             args_json=_enc(args),
             result_json=_enc(result),
@@ -80,7 +138,8 @@ def _invoke_and_log(
     except Exception as e:
         storage.log_event(
             student_id=student_id,
-            experiment_name=trial,
+            experiment_name=_server_state.get_active_experiment(),
+            trial=trial,
             func_name=func_name,
             args_json=_enc(args),
             result_json=None,
@@ -95,12 +154,12 @@ def create_experiment_app(experiment_name: str) -> FastAPI:
 
     db_path = os.path.join(experiment_dir, "db/students.db")
     if not os.path.exists(db_path):
-        print(f"Warning: Database file not found at {db_path}. A new one will be created.")
+        logging.info("Database file not found at %s. A new one will be created.", db_path)
     funcs_dir = os.path.join(experiment_dir, "funcs")
     ui_dir = os.path.join(experiment_dir, "ui")
     admin_creds_path = os.path.join(experiment_dir, "admin_credentials.json")
 
-    print(f"Creating app for experiment '{experiment_name}' with db_path: {db_path}")
+    logging.debug("Creating app for experiment '%s' with db_path: %s", experiment_name, db_path)
     storage = Storage(db_path)
 
     function_registry: Dict[str, Callable[..., Any]] = _load_functions_from_directory(funcs_dir)
@@ -145,11 +204,11 @@ def create_experiment_app(experiment_name: str) -> FastAPI:
         return {"message": "Logged out"}
 
     def _require_active_this_experiment():
-        global _ACTIVE_EXPERIMENT
-        if _ACTIVE_EXPERIMENT is None:
+        active = _server_state.get_active_experiment()
+        if active is None:
             raise HTTPException(status_code=409, detail="No active experiment. Start it from the landing page.")
-        if _ACTIVE_EXPERIMENT != experiment_name:
-            raise HTTPException(status_code=409, detail=f"Experiment '{_ACTIVE_EXPERIMENT}' is active. Open that UI or stop it first.")
+        if active != experiment_name:
+            raise HTTPException(status_code=409, detail=f"Experiment '{active}' is active. Open that UI or stop it first.")
         return True
 
     # Combined dependency: require admin AND active experiment (per-experiment)
@@ -184,23 +243,37 @@ def create_experiment_app(experiment_name: str) -> FastAPI:
         return {"students": storage.list_students()}
 
     class CallRequest(BaseModel):
-        student_id: str
-        func_name: str
+        student_id: str = Field(..., max_length=255)
+        func_name: str = Field(..., max_length=255)
         args: list[Any] = []
         # New preferred name for tagging runs; kept 'experiment' for backward compatibility
-        trial: Optional[str] = None
-        experiment: Optional[str] = None
+        trial: Optional[str] = Field(None, max_length=255)
+        experiment: Optional[str] = Field(None, max_length=255)
         # Explicit experiment context; must match active experiment for root calls
-        experiment_name: Optional[str] = None
+        experiment_name: Optional[str] = Field(None, max_length=255)
+
+        @validator('student_id', 'func_name')
+        def validate_required_strings(cls, v):
+            return _validate_safe_string(v)
+        
+        @validator('trial', 'experiment', 'experiment_name')
+        def validate_optional_strings(cls, v):
+            if v is not None:
+                return _validate_safe_string(v, allow_empty=True)
+            return v
+        
+        @validator('args')
+        def validate_args(cls, v):
+            return _validate_function_args(v)
 
     @app.post("/call")
     def call_function(req: CallRequest):
         # Enforce experiment context: only allow calls when THIS experiment is active
-        global _ACTIVE_EXPERIMENT
-        if _ACTIVE_EXPERIMENT is None:
+        active = _server_state.get_active_experiment()
+        if active is None:
             raise HTTPException(status_code=409, detail="No active experiment. Start one from the landing page.")
-        if _ACTIVE_EXPERIMENT != experiment_name:
-            raise HTTPException(status_code=409, detail=f"Experiment '{_ACTIVE_EXPERIMENT}' is active. Open that UI or stop it first.")
+        if active != experiment_name:
+            raise HTTPException(status_code=409, detail=f"Experiment '{active}' is active. Open that UI or stop it first.")
         if req.experiment_name and req.experiment_name != experiment_name:
             raise HTTPException(status_code=409, detail=f"Mismatched experiment context. Expected '{experiment_name}', got '{req.experiment_name}'.")
         if req.func_name not in function_registry:
@@ -231,6 +304,15 @@ def create_experiment_app(experiment_name: str) -> FastAPI:
     def add_student(body: AddStudentBody):
         storage.add_student(student_id=body.student_id, name=body.name, email=body.email)
         return {"status": "ok"}
+
+    class BulkAddStudentsBody(BaseModel):
+        students: List[Dict[str, str]]
+
+    @app.post("/admin/add-students-bulk", dependencies=[Depends(is_admin_authenticated), Depends(_require_active_this_experiment)])
+    def add_students_bulk(body: BulkAddStudentsBody):
+        """Bulk add students for efficient CSV uploads."""
+        result = storage.add_students_bulk(body.students)
+        return {"status": "ok", **result}
 
     @app.get("/admin/students", dependencies=[Depends(is_admin_authenticated), Depends(_require_active_this_experiment)])
     def list_all_students():
@@ -299,7 +381,7 @@ def create_experiment_app(experiment_name: str) -> FastAPI:  # type: ignore[no-r
         project_root=_project_root,
         session_secret=_DERIVED_SESSION_SECRET,
         session_cookie_opts=SESSION_KW,
-        current_active=lambda: _ACTIVE_EXPERIMENT,
+        current_active=_server_state.get_active_experiment,
         invoke_and_log=_invoke_and_log,
     )
 
@@ -315,6 +397,35 @@ app.add_middleware(
 app.add_middleware(SessionMiddleware, secret_key=_DERIVED_SESSION_SECRET, **SESSION_KW)
 
 app.add_middleware(NoCacheHTMLMiddleware)
+
+# Guard root-mounted UI (default experiment) so it's only reachable when that
+# same experiment is active. Otherwise redirect to landing.
+class _RootUIGuard(BaseHTTPMiddleware):
+    def __init__(self, app, *, get_active: callable, get_default: callable):
+        super().__init__(app)
+        self._get_active = get_active
+        self._get_default = get_default
+
+    async def dispatch(self, request, call_next):
+        try:
+            path = request.url.path or ''
+            if path.startswith('/ui') or path.startswith('/static'):
+                active = self._get_active()
+                default = self._get_default()
+                if default and active != default:
+                    from starlette.responses import RedirectResponse
+                    return RedirectResponse(url='/', status_code=307)
+        except Exception:
+            pass
+        return await call_next(request)
+
+def _get_active_name():
+    return _ACTIVE_EXPERIMENT
+
+def _get_default_name():
+    return _DEFAULT_EXPERIMENT
+
+app.add_middleware(_RootUIGuard, get_active=_get_active_name, get_default=_get_default_name)
 
 _experiments_dir = os.path.join(_project_root, "experiments")
 
@@ -343,21 +454,19 @@ if _DEFAULT_EXPERIMENT:
     _default_ui_dir = os.path.join(_default_exp_dir, "ui")
     _default_admin_creds = os.path.join(_default_exp_dir, "admin_credentials.json")
 
-    print(f"Root APIs bound to experiment '{_DEFAULT_EXPERIMENT}' with db at: {_default_db_path}")
+    logging.info("Discovered default context: '%s' (UI binds here). Root APIs operate on the active experiment.", _DEFAULT_EXPERIMENT)
 
     _default_storage = Storage(_default_db_path)
     _default_function_registry: Dict[str, Callable[..., Any]] = _load_functions_from_directory(_default_funcs_dir)
-    _DEFAULT_ADMIN_USERNAME, _DEFAULT_ADMIN_PASSWORD = _load_admin_credentials_from_path(_default_admin_creds)
+    _DEFAULT_ADMIN_USERNAME, _DEFAULT_ADMIN_VERIFY = _load_admin_credentials_from_path(_default_admin_creds)
 else:
     _default_ui_dir = os.path.join(_project_root, "experiments", "default", "ui")
     _default_storage = None
     _default_function_registry = {}
-    _DEFAULT_ADMIN_USERNAME = _DEFAULT_ADMIN_PASSWORD = "admin"
+    _DEFAULT_ADMIN_USERNAME = "admin"
+    _DEFAULT_ADMIN_VERIFY = lambda pw: (pw == "password")
 
-# Mount default experiment UI at /ui and keep /static for compatibility
-if os.path.isdir(_default_ui_dir):
-    app.mount("/ui", StaticFiles(directory=_default_ui_dir), name="ui")
-    app.mount("/static", StaticFiles(directory=_default_ui_dir), name="static")
+# Removed root-mounted /ui and /static; use canonical /exp/<experiment>/ui only.
 
 @app.get("/")
 async def read_index():
@@ -372,11 +481,11 @@ def list_experiments():
 
 @app.get("/api/active-experiment")
 def get_active_experiment():
-    return {"active": _ACTIVE_EXPERIMENT}
+    return {"active": _server_state.get_active_experiment()}
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "active": _ACTIVE_EXPERIMENT, "version": APP_VERSION}
+    return {"ok": True, "active": _server_state.get_active_experiment(), "version": APP_VERSION}
 
 class _StartExperimentBody(BaseModel):
     name: str
@@ -387,8 +496,28 @@ def _require_root_admin_for_api(request: Request):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     return True
 
+def _is_authed_for_experiment(request: Request, exp_name: str) -> bool:
+    try:
+        auth_map = request.session.get("auth_experiments") or {}
+        return bool(auth_map.get(exp_name))
+    except Exception:
+        return False
+
+@app.get("/api/auth-experiments")
+def list_authed_experiments(request: Request):
+    """Return experiments for which this session has admin auth."""
+    try:
+        auth_map = request.session.get("auth_experiments") or {}
+        names = sorted([k for k, v in auth_map.items() if v])
+    except Exception:
+        names = []
+    return {"auth": names}
+
 @app.post("/api/experiments/start")
-def start_experiment(body: _StartExperimentBody, _auth_ok: bool = Depends(_require_root_admin_for_api)):
+def start_experiment(body: _StartExperimentBody, request: Request):
+    # Require admin auth specifically for the target experiment
+    if not _is_authed_for_experiment(request, body.name):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Not authenticated for experiment '{body.name}'")
     global _ACTIVE_EXPERIMENT
     # Allow dynamic addition of experiment folders without restart
     exp_path = os.path.join(_experiments_dir, body.name)
@@ -397,23 +526,32 @@ def start_experiment(body: _StartExperimentBody, _auth_ok: bool = Depends(_requi
     if body.name not in _available_experiments:
         _available_experiments.append(body.name)
     # Lazy-mount experiment app if not already mounted
-    if body.name not in _mounted_experiments:
+    if not _server_state.is_mounted(body.name):
         experiment_app = create_experiment_app(body.name)
         if experiment_app:
             app.mount(f"/exp/{body.name}", experiment_app)
-            _mounted_experiments.add(body.name)
-    if _ACTIVE_EXPERIMENT and _ACTIVE_EXPERIMENT != body.name:
-        raise HTTPException(status_code=409, detail=f"Experiment '{_ACTIVE_EXPERIMENT}' is already active. Stop it first.")
-    _ACTIVE_EXPERIMENT = body.name
-    return {"active": _ACTIVE_EXPERIMENT}
+            _server_state.add_mounted_experiment(body.name)
+    active = _server_state.get_active_experiment()
+    if active and active != body.name:
+        raise HTTPException(status_code=409, detail=f"Experiment '{active}' is already active. Stop it first.")
+    _server_state.set_active_experiment(body.name)
+    return {"active": _server_state.get_active_experiment()}
 
 @app.post("/api/experiments/stop")
-def stop_experiment(_auth_ok: bool = Depends(_require_root_admin_for_api)):
-    global _ACTIVE_EXPERIMENT
-    if not _ACTIVE_EXPERIMENT:
+def stop_experiment(request: Request):
+    active = _server_state.get_active_experiment()
+    if not active:
         raise HTTPException(status_code=400, detail="No active experiment to stop")
-    prev = _ACTIVE_EXPERIMENT
-    _ACTIVE_EXPERIMENT = None
+    # Require admin auth for the active experiment
+    if not _is_authed_for_experiment(request, active):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Not authenticated for experiment '{active}'")
+    prev = active
+    _server_state.set_active_experiment(None)
+    # Stricter isolation: clear all experiment auth so future launches require re-login
+    try:
+        request.session["auth_experiments"] = {}
+    except Exception:
+        pass
     return {"stopped": prev, "active": None}
 
 experiments_dir = os.path.join(_project_root, "experiments")
@@ -423,7 +561,7 @@ if os.path.isdir(experiments_dir):
             experiment_app = create_experiment_app(experiment_name)
             if experiment_app:
                 app.mount(f"/exp/{experiment_name}", experiment_app)
-                _mounted_experiments.add(experiment_name)
+                _server_state.add_mounted_experiment(experiment_name)
 
 # -------------------------------
 # Root-level Admin & Student APIs
@@ -436,15 +574,22 @@ class _RootLoginRequest(BaseModel):
 
 @app.post("/admin/login")
 async def root_login(request: Request, login_data: _RootLoginRequest):
-    if login_data.username == _DEFAULT_ADMIN_USERNAME and login_data.password == _DEFAULT_ADMIN_PASSWORD:
+    if login_data.username == _DEFAULT_ADMIN_USERNAME and _DEFAULT_ADMIN_VERIFY(login_data.password):
         request.session["authenticated"] = True
         return {"message": "Login successful"}
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
 def _root_is_admin_authenticated(request: Request):
-    if not request.session.get("authenticated"):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-    return True
+    # Root auth via global flag or scoped experiment auth for the active experiment
+    if request.session.get("authenticated"):
+        return True
+    try:
+        active = _server_state.get_active_experiment()
+        if active and _is_authed_for_experiment(request, active):
+            return True
+    except Exception:
+        pass
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
 @app.post("/admin/logout")
 async def root_logout(request: Request, response: Response):
@@ -457,10 +602,25 @@ async def root_admin_ping(authenticated: bool = Depends(_root_is_admin_authentic
     return {"ok": True}
 
 def _require_active_root():
-    global _ACTIVE_EXPERIMENT
-    if _ACTIVE_EXPERIMENT is None:
+    if _server_state.get_active_experiment() is None:
         raise HTTPException(status_code=409, detail="No active experiment. Start one from the landing page.")
     return True
+
+def _get_active_storage() -> Storage:
+    """Return a Storage bound to the currently active experiment DB."""
+    active = _server_state.get_active_experiment()
+    if active is None:
+        raise HTTPException(status_code=409, detail="No active experiment. Start one from the landing page.")
+    db_path = os.path.join(_experiments_dir, active, "db", "students.db")
+    return Storage(db_path)
+
+def _get_active_registry() -> Dict[str, Callable[..., Any]]:
+    """Return a function registry for the active experiment."""
+    active = _server_state.get_active_experiment()
+    if active is None:
+        raise HTTPException(status_code=409, detail="No active experiment. Start one from the landing page.")
+    funcs_dir = os.path.join(_experiments_dir, active, "funcs")
+    return _load_functions_from_directory(funcs_dir)
 
 # Combined dependency: require admin AND active experiment (root)
 def _require_admin_and_active_root(
@@ -469,62 +629,66 @@ def _require_admin_and_active_root(
 ):
     return True
 
-@app.get("/functions")
+@app.get("/functions", dependencies=[Depends(_require_active_root)])
 def root_list_functions():
-    if _DEFAULT_EXPERIMENT is None:
-        raise HTTPException(status_code=503, detail="No experiments available")
+    registry = _get_active_registry()
     return {
         name: {
             "signature": str(inspect.signature(fn)),
             "doc": (fn.__doc__ or "").strip()
         }
-        for name, fn in _default_function_registry.items()
+        for name, fn in registry.items()
     }
 
 # Students list requires admin + active experiment
 @app.get("/students")
 def root_list_students_admin(authenticated: bool = Depends(_root_is_admin_authenticated), _active_ok: bool = Depends(_require_active_root)):
-    if _DEFAULT_EXPERIMENT is None or _default_storage is None:
-        raise HTTPException(status_code=503, detail="No experiments available")
-    return {"students": _default_storage.list_students()}
+    storage = _get_active_storage()
+    return {"students": storage.list_students()}
 
 class _RootCallRequest(BaseModel):
-    student_id: str
-    func_name: str
+    student_id: str = Field(..., max_length=255)
+    func_name: str = Field(..., max_length=255)
     args: list[Any] = []
-    trial: Optional[str] = None
-    experiment: Optional[str] = None
-    experiment_name: Optional[str] = None
+    trial: Optional[str] = Field(None, max_length=255)
+    experiment: Optional[str] = Field(None, max_length=255)
+    experiment_name: str = Field(..., max_length=255)
 
-@app.post("/call")
-def root_call_function(req: _RootCallRequest):
-    if _DEFAULT_EXPERIMENT is None:
-        raise HTTPException(status_code=503, detail="No experiments available")
-    if req.func_name not in _default_function_registry:
+    @validator('student_id', 'func_name', 'experiment_name')
+    def validate_safe_strings(cls, v):
+        return _validate_safe_string(v)
+    
+    @validator('trial', 'experiment')
+    def validate_optional_strings(cls, v):
+        if v is not None:
+            return _validate_safe_string(v, allow_empty=True)
+        return v
+    
+    @validator('args')
+    def validate_args(cls, v):
+        return _validate_function_args(v)
+
+@app.post("/call", dependencies=[Depends(_require_active_root)])
+def root_call_function(req: _RootCallRequest = Body(...)):
+    storage = _get_active_storage()
+    registry = _get_active_registry()
+    # Require explicit experiment_name from client and verify it matches the active experiment
+    active = _server_state.get_active_experiment()
+    if req.experiment_name != active:
+        raise HTTPException(status_code=409, detail=f"Mismatched experiment context. Active='{active}', got='{req.experiment_name}'.")
+    if req.func_name not in registry:
         raise HTTPException(status_code=404, detail=f"Function '{req.func_name}' not found")
-    if not _default_storage or not _default_storage.student_exists(req.student_id):
+    if not storage.student_exists(req.student_id):
         raise HTTPException(status_code=403, detail=f"Invalid student ID '{req.student_id}'")
-
-    # Enforce experiment context against active experiment
-    global _ACTIVE_EXPERIMENT
-    ctx = req.experiment_name
-    if _ACTIVE_EXPERIMENT is None:
-        raise HTTPException(status_code=409, detail="No active experiment. Please start one from the landing page.")
-    if not ctx:
-        raise HTTPException(status_code=409, detail="Missing experiment_name in request.")
-    if ctx != _ACTIVE_EXPERIMENT:
-        raise HTTPException(status_code=409, detail=f"Mismatched experiment context. Active='{_ACTIVE_EXPERIMENT}', got='{ctx}'.")
-
-    fn = _default_function_registry[req.func_name]
+    fn = registry[req.func_name]
     trial_name = req.trial or req.experiment
     try:
         result = _invoke_and_log(
-            storage=_default_storage, fn=fn, func_name=req.func_name,
+            storage=storage, fn=fn, func_name=req.func_name,
             args=req.args, student_id=req.student_id, trial=trial_name,
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Function execution error: {e}")
-
     return {"result": jsonable_encoder(result)}
 
 class _RootAddStudentBody(BaseModel):
@@ -533,23 +697,20 @@ class _RootAddStudentBody(BaseModel):
     email: Optional[str] = None
 
 @app.post("/admin/add-student", dependencies=[Depends(_require_admin_and_active_root)])
-def root_add_student(body: _RootAddStudentBody):
-    if _DEFAULT_EXPERIMENT is None or _default_storage is None:
-        raise HTTPException(status_code=503, detail="No experiments available")
-    _default_storage.add_student(student_id=body.student_id, name=body.name, email=body.email)
+def root_add_student(body: _RootAddStudentBody = Body(...)):
+    storage = _get_active_storage()
+    storage.add_student(student_id=body.student_id, name=body.name, email=body.email)
     return {"status": "ok"}
 
 @app.get("/admin/students", dependencies=[Depends(_require_admin_and_active_root)])
 def root_list_all_students():
-    if _DEFAULT_EXPERIMENT is None or _default_storage is None:
-        raise HTTPException(status_code=503, detail="No experiments available")
-    return {"students": _default_storage.list_students()}
+    storage = _get_active_storage()
+    return {"students": storage.list_students()}
 
 @app.delete("/admin/student/{student_id}", status_code=200, dependencies=[Depends(_require_admin_and_active_root)])
 def root_remove_student(student_id: str):
-    if _DEFAULT_EXPERIMENT is None or _default_storage is None:
-        raise HTTPException(status_code=503, detail="No experiments available")
-    was_deleted = _default_storage.delete_student(student_id)
+    storage = _get_active_storage()
+    was_deleted = storage.delete_student(student_id)
     if not was_deleted:
         raise HTTPException(status_code=404, detail=f"Student ID '{student_id}' not found.")
     return {"status": "ok", "message": f"Student '{student_id}' and all associated logs have been deleted."}
@@ -562,11 +723,16 @@ def root_get_server_logs(
     n: int = Query(100, ge=1, le=1000),
     order: Literal["latest", "earliest"] = Query("latest"),
 ):
-    if _DEFAULT_EXPERIMENT is None or _default_storage is None:
-        raise HTTPException(status_code=503, detail="No experiments available")
+    storage = _get_active_storage()
     eff_trial = trial or experiment_name
-    logs = _default_storage.fetch_logs(student_id=student_id, experiment_name=eff_trial, n=n, order=order)
+    logs = storage.fetch_logs(student_id=student_id, trial=eff_trial, n=n, order=order)
     return {"logs": logs}
+
+@app.delete("/admin/logs/student/{student_id}", status_code=200, dependencies=[Depends(_require_admin_and_active_root)])
+def root_delete_logs_for_student(student_id: str):
+    storage = _get_active_storage()
+    deleted = storage.delete_logs_by_student(student_id)
+    return {"status": "ok", "deleted": deleted}
 
 @app.get("/logs")
 def root_get_logs(
@@ -582,16 +748,15 @@ def root_get_logs(
     end_time: Optional[datetime.datetime] = Query(None),
     _active_ok: bool = Depends(_require_active_root),
 ):
-    if _DEFAULT_EXPERIMENT is None or _default_storage is None:
-        raise HTTPException(status_code=503, detail="No experiments available")
+    storage = _get_active_storage()
     eff_student, eff_experiment = _resolve_log_filters(
         student_id=student_id, sid=sid,
         experiment_name=experiment_name, exp=exp,
         trial=trial, trial_name=trial_name,
     )
-    logs = _default_storage.fetch_logs(
+    logs = storage.fetch_logs(
         student_id=eff_student,
-        experiment_name=eff_experiment,
+        trial=eff_experiment,
         n=n,
         order=order,
         start_time=start_time,
@@ -601,23 +766,18 @@ def root_get_logs(
 
 @app.get("/log-options")
 def root_get_log_options():
-    if _DEFAULT_EXPERIMENT is None or _default_storage is None:
-        raise HTTPException(status_code=503, detail="No experiments available")
-    students = _default_storage.distinct_students_with_logs()
-    experiments = _default_storage.distinct_experiments()
+    storage = _get_active_storage()
+    students = storage.distinct_students_with_logs()
+    experiments = storage.distinct_experiments()
     return {"students": students, "experiments": experiments, "trials": experiments}
 
-@app.get("/is-registered")
+@app.get("/is-registered", dependencies=[Depends(_require_active_root)])
 def root_is_registered(student_id: str = Query(...)):
-    if _DEFAULT_EXPERIMENT is None or _default_storage is None:
-        raise HTTPException(status_code=503, detail="No experiments available")
-    return {"registered": bool(_default_storage.student_exists(student_id))}
+    storage = _get_active_storage()
+    return {"registered": bool(storage.student_exists(student_id))}
 
-@app.post("/admin/reload-functions")
-def root_reload_functions(authenticated: bool = Depends(_root_is_admin_authenticated)):
-    if _DEFAULT_EXPERIMENT is None:
-        raise HTTPException(status_code=503, detail="No experiments available")
-    # Refresh in place to avoid rebinding the global variable
-    _default_function_registry.clear()
-    _default_function_registry.update(_load_functions_from_directory(_default_funcs_dir))
-    return {"status": "ok", "functions": len(_default_function_registry)}
+@app.post("/admin/reload-functions", dependencies=[Depends(_require_admin_and_active_root)])
+def root_reload_functions():
+    """No-op for root; functions are loaded on demand from the active experiment."""
+    registry = _get_active_registry()
+    return {"status": "ok", "functions": len(registry)}

@@ -14,7 +14,19 @@
     .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
     .tile { background: var(--surface-color); border: 1px solid var(--border-color); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
     .tile h3 { margin: 0; color: var(--primary-color); font-size: 16px; font-weight: 600; }
-    .result { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace; font-size: 14px; color: #cbd5e1; }
+    .result {
+      display:flex; align-items:center; justify-content:center; min-height: 36px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace; font-size: 15px;
+      color: var(--secondary-color);
+      background: linear-gradient(180deg, rgba(28,36,54,.96), rgba(25,34,51,.92));
+      border: 1px solid var(--border-color); border-radius: 10px; padding: 8px 10px;
+      box-shadow: 0 10px 20px rgba(2,6,23,.28), inset 0 1px 0 rgba(255,255,255,.04);
+    }
+    html[data-theme='light'] .result {
+      color: #0f1422;
+      background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(247,249,252,.96));
+      box-shadow: 0 10px 20px rgba(15,20,34,.12), inset 0 1px 0 rgba(255,255,255,.6);
+    }
     .msg { font-size: 13px; color: var(--muted-color); min-height: 1.2em; }
     .msg.ok { color: var(--success-color); }
     .msg.err { color: var(--error-color); }
@@ -26,7 +38,7 @@
     <div class="toolbar" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
       <a href="dashboard.html">← Back</a>
       <div style="flex:1"></div>
-      <span class="badge" id="exp-scope">Scope: …</span>
+      <span class="badge" id="active">Active: …</span>
     </div>
     <h1>Random Actions</h1>
     <div class="controls">
@@ -117,7 +129,7 @@
 
   <script>
     const sidEl = document.getElementById('studentId');
-    const expScope = document.getElementById('exp-scope');
+    
     const expNameEl = document.getElementById('experimentName');
     const trialEl = document.getElementById('trial');
 
@@ -155,17 +167,10 @@
       } catch (_) { /* ignore */ }
     })();
 
-    function baseUrl() {
-      const origin = window.location.origin;
-      const m = window.location.pathname.match(/\/exp\/([^\/]+)/);
-      if (m && m[1]) return `${origin}/exp/${m[1]}`;
-      const expName = (expNameEl.value || '').trim();
-      return expName ? `${origin}/exp/${expName}` : origin;
-    }
+    function baseUrl() { return window.location.origin; }
     // Set scope badge
-    (function(){
-      const m = window.location.pathname.match(/\/exp\/([^\/]+)/);
-      if (expScope) expScope.textContent = `Scope: ${m ? m[1] : 'root'}`;
+    (async function(){
+      try{ const res = await fetch(`${window.location.origin}/api/active-experiment`); const d = await res.json(); document.getElementById('active').textContent = `Active: ${d.active || 'none'}`; }catch{}
     })();
 
     function coin() { return Math.random() < 0.5 ? 'H' : 'T'; }
@@ -200,8 +205,10 @@
     async function sendResult(kind, value) {
       const { sid, trial } = ensureRequiredFields();
       const payload = { kind, value, ts: nowIso() };
-      // Root APIs auto-scope to the active experiment; no need to send experiment_name
-      const body = { student_id: sid, func_name: 'echo', args: [payload], trial };
+      // Root /call requires explicit experiment_name and verifies against active
+      let experiment_name = '';
+      try { const r = await fetch(`${window.location.origin}/api/active-experiment`); if (r.ok) { const d = await r.json(); experiment_name = d.active || ''; } } catch {}
+      const body = { student_id: sid, func_name: 'echo', args: [payload], trial, experiment_name };
       const url = `${window.location.origin}/call`;
       const res = await fetch(url, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
@@ -271,5 +278,6 @@
       btn.addEventListener('click', () => handle(btn.dataset.action));
     });
   </script>
+  <script src="scripts/theme.js"></script>
 </body>
 </html>

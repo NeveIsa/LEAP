@@ -28,3 +28,4 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:I
 .kpi{display:flex;align-items:center;gap:10px}
 .kpi .num{font-size:28px;font-weight:800}
 .stack{display:flex;flex-direction:column;gap:10px}
+.spark-canvas{width:100%;max-width:360px;height:48px;background:var(--panel);border:1px solid var(--border);border-radius:6px;display:block}

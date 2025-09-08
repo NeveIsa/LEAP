@@ -14,7 +14,7 @@
     <div class="top">
       <a class="link" href="dashboard.html">← Back</a>
       <div class="spacer"></div>
-      <span id="scope" class="badge">Scope</span>
+      <span id="active" class="badge">Active: …</span>
       <a class="link" href="login.html">Login</a>
     </div>
 
@@ -51,8 +51,9 @@
   </div>
 
   <script>
-    const origin=location.origin; const m=location.pathname.match(/\/exp\/([^\/]+)/); const exp=m?m[1]:null; document.getElementById('scope').textContent=`Scope: ${exp||'root'}`;
-    const api = (p)=> `${origin}${exp?`/exp/${exp}`:''}${p}`;
+    const origin=location.origin; const m=location.pathname.match(/\/exp\/([^\/]+)/); const exp=m?m[1]:null;
+    (async()=>{ try{ const r=await fetch(`${origin}/api/active-experiment`); const d=await r.json(); document.getElementById('active').textContent=`Active: ${d.active || 'none'}`; }catch{} })();
+    const apiRoot = (p)=> `${origin}${p}`; // Use root endpoints bound to active experiment
     const tblBody = document.querySelector('#tbl tbody');
     const total = document.getElementById('total');
     const msg = document.getElementById('msg');
@@ -61,14 +62,14 @@
     async function extractError(resp){ try{ const d=await resp.json(); if(d && d.detail!==undefined){ return typeof d.detail==='string'? d.detail: JSON.stringify(d.detail);} }catch{} try{ return await resp.text(); }catch{} return ''; }
 
     async function load(){
-      try{ const r=await fetch(api('/admin/students'),{credentials:'include'}); if(!r.ok){ if(r.status===401){ setMsg(msg,'Login required'); return; } if(r.status===409){ setMsg(msg,'No active experiment'); return; } throw new Error(await extractError(r)||`HTTP ${r.status}`);} const d=await r.json(); const rows=d.students||[]; tblBody.innerHTML=''; rows.forEach(s=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td>${s.student_id}</td><td>${s.name}</td><td>${s.email||''}</td>`; tr.onclick=()=> manage(s); tblBody.appendChild(tr); }); total.textContent=rows.length; msg.textContent=''; msg.className='msg'; }
+      try{ const r=await fetch(apiRoot('/admin/students'),{credentials:'include'}); if(!r.ok){ if(r.status===401){ setMsg(msg,'Login required'); return; } if(r.status===409){ setMsg(msg,'No active experiment'); return; } throw new Error(await extractError(r)||`HTTP ${r.status}`);} const d=await r.json(); const rows=d.students||[]; tblBody.innerHTML=''; rows.forEach(s=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td>${s.student_id}</td><td>${s.name}</td><td>${s.email||''}</td>`; tr.onclick=()=> manage(s); tblBody.appendChild(tr); }); total.textContent=rows.length; msg.textContent=''; msg.className='msg'; }
       catch(e){ setMsg(msg, e.message||String(e)); }
     }
 
     async function manage(s){
       const act = prompt(`Manage ${s.student_id} (d=delete, c=clear logs, other=cancel)`);
-      if(act==='d'){ if(!confirm(`Delete ${s.student_id}?`)) return; const r=await fetch(api(`/admin/student/${s.student_id}`),{method:'DELETE',credentials:'include'}); if(!r.ok){ alert(await extractError(r)||`HTTP ${r.status}`); return;} await load(); }
-      if(act==='c'){ if(!confirm(`Delete ALL logs for ${s.student_id}?`)) return; const r=await fetch(api(`/admin/logs/student/${s.student_id}`),{method:'DELETE',credentials:'include'}); if(!r.ok){ alert(await extractError(r)||`HTTP ${r.status}`); return;} alert('Logs cleared'); }
+      if(act==='d'){ if(!confirm(`Delete ${s.student_id}?`)) return; const r=await fetch(apiRoot(`/admin/student/${s.student_id}`),{method:'DELETE',credentials:'include'}); if(!r.ok){ alert(await extractError(r)||`HTTP ${r.status}`); return;} await load(); }
+      if(act==='c'){ if(!confirm(`Delete ALL logs for ${s.student_id}?`)) return; const r=await fetch(apiRoot(`/admin/logs/student/${s.student_id}`),{method:'DELETE',credentials:'include'}); if(!r.ok){ alert(await extractError(r)||`HTTP ${r.status}`); return;} alert('Logs cleared'); }
     }
 
     document.getElementById('add').onclick = async () => {
@@ -76,7 +77,7 @@
       const name=document.getElementById('name').value.trim();
       const email=document.getElementById('email').value.trim();
       if(!sid||!name){ setMsg(msg,'Student ID and Name required'); return; }
-      try{ const r=await fetch(api('/admin/add-student'),{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({student_id:sid,name,email:email||undefined})}); if(!r.ok){ throw new Error(await extractError(r)||`HTTP ${r.status}`);} setMsg(msg,'Added',true); document.getElementById('sid').value=''; document.getElementById('name').value=''; document.getElementById('email').value=''; await load(); } catch(e){ setMsg(msg,e.message||String(e)); }
+      try{ const r=await fetch(apiRoot('/admin/add-student'),{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({student_id:sid,name,email:email||undefined})}); if(!r.ok){ throw new Error(await extractError(r)||`HTTP ${r.status}`);} setMsg(msg,'Added',true); document.getElementById('sid').value=''; document.getElementById('name').value=''; document.getElementById('email').value=''; await load(); } catch(e){ setMsg(msg,e.message||String(e)); }
     };
 
     let parsed=null; const csvEl=document.getElementById('csv'); const count=document.getElementById('count'); const csvMsg=document.getElementById('csvMsg');
@@ -89,7 +90,7 @@
       parsed=clean; count.textContent=clean.length; document.getElementById('upload').disabled = clean.length===0; csvMsg.textContent = clean.length? 'Ready to register':'No valid rows';
     };
     document.getElementById('upload').onclick = async ()=>{
-      if(!parsed?.length) return; let ok=0, fail=0; for(const s of parsed){ try{ const r=await fetch(api('/admin/add-student'),{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(s)}); if(!r.ok) throw new Error(); ok++; }catch{ fail++; } }
+      if(!parsed?.length) return; let ok=0, fail=0; for(const s of parsed){ try{ const r=await fetch(apiRoot('/admin/add-student'),{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(s)}); if(!r.ok) throw new Error(); ok++; }catch{ fail++; } }
       csvMsg.textContent = `Done. Success ${ok}, Failed ${fail}`; parsed=null; document.getElementById('upload').disabled=true; csvEl.value=''; await load();
     };
 
@@ -97,4 +98,3 @@
   </script>
 </body>
 </html>
-

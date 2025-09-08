@@ -7,17 +7,100 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <link rel="stylesheet" href="/static/style/main.css">
+    <!-- Unique landing theme (not shared with any experiment) -->
     <style>
-        /* Override dashboard container centering for table content */
+        :root {
+            --lp-bg: radial-gradient(1200px 800px at 10% 10%, #0f172a 0%, #0b1022 28%, #070b19 60%, #060915 100%);
+            --lp-ink: #e6e9f5;
+            --lp-muted: #9aa3b2;
+            --lp-card: rgba(22, 28, 45, 0.72);
+            --lp-border: rgba(148, 163, 184, 0.18);
+            --lp-accent: #a78bfa; /* violet */
+            --lp-accent-2: #f472b6; /* pink */
+            --lp-good: #7ef29a;
+        }
+        * { box-sizing: border-box }
+        html, body { height: 100%; }
+        body {
+            margin: 0;
+            padding: 0;
+            background: var(--lp-bg);
+            color: var(--lp-ink);
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, 'Helvetica Neue', Arial, 'Apple Color Emoji', 'Segoe UI Emoji';
+        }
+        .page-centered { display: grid; place-items: center; padding: 32px 16px; }
+        .dashboard-container {
+            width: min(920px, 95vw);
+            background: var(--lp-card);
+            border: 1px solid var(--lp-border);
+            border-radius: 16px;
+            padding: 22px 22px 18px;
+            box-shadow: 0 20px 40px rgba(2, 6, 23, 0.45), inset 0 1px 0 rgba(255,255,255,0.04);
+            backdrop-filter: blur(10px);
+        }
+        h1 { margin: 0 0 6px 0; font-size: 26px; letter-spacing: 0.2px; }
+        p { margin: 6px 0; color: var(--lp-muted); }
+        .text-muted { color: var(--lp-muted); }
+
+        .table-wrap { margin-top: 14px; border: 1px solid var(--lp-border); border-radius: 12px; overflow: hidden; }
+        table { width: 100%; border-collapse: collapse; }
+        thead { background: rgba(167, 139, 250, 0.08); }
+        th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--lp-border); }
+        tbody tr:hover { background: rgba(244, 114, 182, 0.06); transition: background 160ms ease; }
+
+        .toolbar { margin-top: 12px; }
+        .badge { display: inline-block; padding: 6px 10px; border-radius: 999px; font-weight: 600; background: linear-gradient(135deg, rgba(167,139,250,0.18), rgba(244,114,182,0.18)); border: 1px solid var(--lp-border); color: var(--lp-ink); }
+        /* Normalize button/link buttons to identical size */
+        .btn { 
+            display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+            height: 36px; padding: 0 12px; font-size: 14px; line-height: 1; font-weight: 700;
+            border-radius: 10px; border: 0; cursor: pointer; text-decoration: none;
+            color: #0b1022; background: linear-gradient(135deg, var(--lp-accent), var(--lp-accent-2));
+            box-shadow: 0 6px 14px rgba(167,139,250,0.22);
+        }
+        button.btn { appearance: none; -webkit-appearance: none; border: 0; }
+        a.btn { color: #0b1022; text-decoration: none; }
+        .btn[disabled], .btn[aria-disabled="true"] { opacity: .55; cursor: not-allowed; }
+
+        /* Make the status chip pop when active */
+        .status-active { color:#0b1022; background:#34f5c5; }
+
+        /* Subtle pulse for active badge */
+        @keyframes pulseGlow { 0%{box-shadow:0 0 0 0 rgba(167,139,250,.4)} 70%{box-shadow:0 0 0 8px rgba(167,139,250,0)} 100%{box-shadow:0 0 0 0 rgba(167,139,250,0)} }
+        .pulse { animation: pulseGlow 2.2s ease-out infinite; }
+
+        /* Minimal logo mark */
+        .lp-logo { width:28px; height:28px; border-radius:8px; background: conic-gradient(from 210deg, var(--lp-accent), var(--lp-accent-2)); box-shadow: 0 6px 14px rgba(167,139,250,0.28), inset 0 1px 0 rgba(255,255,255,.18); }
+
+        /* Polished login modal */
+        .lp-modal { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(2, 6, 23, 0.6); backdrop-filter: blur(6px); z-index: 1000; }
+        .lp-dialog { width: min(520px, 94vw); background: var(--lp-card); border: 1px solid var(--lp-border); border-radius: 14px; padding: 18px; box-shadow: 0 20px 40px rgba(2, 6, 23, 0.45), inset 0 1px 0 rgba(255,255,255,0.04); }
+        .lp-head { display:flex; align-items:center; gap:10px; margin-bottom: 12px; }
+        .lp-head .lp-logo { width:22px; height:22px; border-radius:6px; }
+        .lp-head h3 { margin:0; font-size:18px; letter-spacing:.2px; }
+        .lp-head .badge { font-size:12px; padding:4px 8px; }
+        .lp-form { display:flex; flex-direction:column; gap:10px; }
+        .lp-label { font-size:13px; color: var(--lp-muted); }
+        .lp-input { width:100%; height:38px; padding: 0 10px; border-radius:10px; border:1px solid var(--lp-border); background:#0f1427; color: var(--lp-ink); outline:none; }
+        .lp-input:focus { border-color: rgba(167,139,250,0.55); box-shadow: 0 0 0 3px rgba(167,139,250,0.18); }
+        .lp-actions { display:flex; gap:10px; align-items:center; justify-content:flex-end; margin-top: 4px; }
+        .lp-error { color:#ff6b6b; flex:1; text-align:left; font-size:13px; }
+
+        /* Keep table text left-aligned */
         .dashboard-container table th,
         .dashboard-container table td { text-align: left; }
+        /* Keep primary action (Launch/Stop) width consistent regardless of label */
+        .table-wrap td:last-child button.btn { min-width: 96px; }
     </style>
 </head>
 <body class="page-centered">
     <div class="dashboard-container">
-        <h1>Select an Experiment</h1>
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:6px;">
+            <div class="lp-logo" aria-hidden="true"></div>
+            <h1 style="margin:0;">Select an Experiment</h1>
+        </div>
         <p>The following experiments are available. Only one can be active at a time.</p>
+        <p class="text-muted" style="margin-top:-6px">Clients call root APIs and must include <code>experiment_name</code> that matches the currently active experiment; requests for other experiments are rejected.</p>
         <div class="table-wrap">
             <table>
                 <thead>
@@ -32,8 +115,11 @@
                 </tbody>
             </table>
         </div>
-        <div class="toolbar" style="margin-top:16px; display:flex; gap:10px; align-items:center;">
+        <div class="toolbar" style="margin-top:16px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
             <span class="badge" id="active-badge">Active: …</span>
+            <span class="badge" id="auth-badge">Logged in for: none</span>
+            <span id="lock-note" class="text-muted" style="display:none; font-size:13px;">Stop the active experiment to launch another.</span>
+            <div style="flex:1"></div>
             <button class="btn" id="refresh">Refresh</button>
         </div>
     </div>
@@ -55,14 +141,21 @@
         async function refreshExperiments() {
             const tbody = document.getElementById('exp-table-body');
             const activeBadge = document.getElementById('active-badge');
+            const authBadge = document.getElementById('auth-badge');
+            const lockNote = document.getElementById('lock-note');
             tbody.innerHTML = '';
             try {
-                const [experiments, activeObj] = await Promise.all([
+                const [experiments, activeObj, authObj] = await Promise.all([
                     fetchJSON('/api/experiments'),
                     fetchJSON('/api/active-experiment').catch(() => ({ active: null })),
+                    fetchJSON('/api/auth-experiments').catch(() => ({ auth: [] })),
                 ]);
                 const active = activeObj && typeof activeObj === 'object' ? activeObj.active : null;
                 activeBadge.textContent = `Active: ${active || 'none'}`;
+                activeBadge.classList.toggle('pulse', !!active);
+                lockNote.style.display = active ? '' : 'none';
+                const authList = Array.isArray(authObj?.auth) ? authObj.auth : [];
+                authBadge.textContent = `Logged in for: ${authList.length ? authList.join(', ') : 'none'}`;
                 if (!Array.isArray(experiments) || experiments.length === 0) {
                     const tr = document.createElement('tr');
                     tr.innerHTML = `<td colspan="3" style="text-align:center;">No experiments found.</td>`;
@@ -73,15 +166,16 @@
                     const tr = document.createElement('tr');
                     const isActive = active === exp;
                     const status = isActive ? '<span class="badge" style="color:#1a1a1a;background:#00f5d4;">Active</span>' : '';
-                    const buttonDisabled = (active && !isActive) ? 'disabled' : '';
+                    const buttonDisabled = (active && !isActive);
                     // Open UI should only be clickable when this experiment is active
                     const linkDisabledAttr = (!isActive) ? 'aria-disabled="true" tabindex="-1" style="opacity:0.5;pointer-events:none;"' : '';
                     const actionLabel = isActive ? 'Stop' : 'Launch';
+                    const disabledAttrs = buttonDisabled ? 'disabled aria-disabled="true" style="opacity:0.6;pointer-events:none;" title="Stop the active experiment to launch another"' : '';
                     tr.innerHTML = `
                         <td><strong>${exp}</strong></td>
                         <td>${status}</td>
                         <td>
-                            <button class="btn" data-exp="${exp}" data-action="${isActive ? 'stop' : 'start'}" ${buttonDisabled}>${actionLabel}</button>
+                            <button class="btn" data-exp="${exp}" data-action="${isActive ? 'stop' : 'start'}" ${disabledAttrs}>${actionLabel}</button>
                             <a class="btn" href="/exp/${exp}/ui/dashboard.html" target="_blank" rel="noopener noreferrer" ${linkDisabledAttr}>Open UI</a>
                         </td>
                     `;
@@ -131,6 +225,10 @@
                 btnClose.onclick = onClose;
                 modal.onclick = (ev) => { if (ev.target === modal) onClose(); };
 
+                // Set target experiment name in the modal header badge
+                const expBadge = modal.querySelector('#lp-exp-badge');
+                if (expBadge) expBadge.textContent = expName || 'unknown';
+
                 const onSubmit = async (ev) => {
                     ev.preventDefault();
                     errBox.textContent = '';
@@ -138,8 +236,7 @@
                     const password = form.querySelector('input[name="password"]').value.trim();
                     try {
                         // Authenticate against the target experiment's admin
-                        const loginUrl = expName ? `/exp/${expName}/admin/login` : '/admin/login';
-                        const res = await fetch(loginUrl, {
+                        const res = await fetch(`/exp/${expName}/admin/login`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             credentials: 'include',
@@ -173,23 +270,27 @@
             if (modal) return modal;
             modal = document.createElement('div');
             modal.id = 'login-modal';
-            modal.style.cssText = 'position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);z-index:1000;';
-            modal.innerHTML = `
-                <div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:20px;min-width:300px;max-width:90vw;">
-                    <h3 style="margin-top:0;color:#00f5d4;">Admin Login</h3>
-                    <form>
-                        <label>Username</label>
-                        <input type="text" name="username" value="admin" style="width:100%;margin-bottom:10px;" />
-                        <label>Password</label>
-                        <input type="password" name="password" value="password" style="width:100%;margin-bottom:10px;" />
-                        <div style="display:flex;gap:10px;justify-content:flex-end;align-items:center;margin-top:10px;">
-                            <span data-error style="color:#e74c3c;flex:1;text-align:left;font-size:13px;"></span>
-                            <button type="button" class="btn" data-close>Cancel</button>
-                            <button type="submit" class="btn">Login</button>
-                        </div>
-                    </form>
-                </div>
-            `;
+            modal.className = 'lp-modal';
+            modal.innerHTML = [
+                '<div class="lp-dialog">',
+                '  <div class="lp-head">',
+                '    <div class="lp-logo" aria-hidden="true"></div>',
+                '    <h3>Admin Login</h3>',
+                '    <span class="badge" id="lp-exp-badge">&nbsp;</span>',
+                '  </div>',
+                '  <form class="lp-form">',
+                '    <label class="lp-label" for="lp-username">Username</label>',
+                '    <input class="lp-input" id="lp-username" type="text" name="username" value="admin" autocomplete="username" />',
+                '    <label class="lp-label" for="lp-password">Password</label>',
+                '    <input class="lp-input" id="lp-password" type="password" name="password" value="password" autocomplete="current-password" />',
+                '    <div class="lp-actions">',
+                '      <span data-error class="lp-error"></span>',
+                '      <button type="button" class="btn ghost" data-close>Cancel</button>',
+                '      <button type="submit" class="btn">Login</button>',
+                '    </div>',
+                '  </form>',
+                '</div>'
+            ].join('\n');
             document.body.appendChild(modal);
             return modal;
         }
@@ -199,6 +300,7 @@
         document.addEventListener('click', (ev) => {
             const btn = ev.target.closest('button.btn[data-action][data-exp]');
             if (!btn) return;
+            if (btn.hasAttribute('disabled')) return; // ignore disabled
             ev.preventDefault();
             const action = btn.getAttribute('data-action');
             const name = btn.getAttribute('data-exp');

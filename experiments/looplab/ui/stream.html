@@ -21,7 +21,7 @@
     <div class="top">
       <a class="link" href="dashboard.html">← Back</a>
       <div class="spacer"></div>
-      <span id="scope" class="badge">Scope</span>
+      <span id="active" class="badge">Active: …</span>
     </div>
 
     <div class="card" style="margin-bottom:12px">
@@ -38,8 +38,8 @@
   </div>
 
   <script>
-    const origin=location.origin; const m=location.pathname.match(/\/exp\/([^\/]+)/); const exp=m?m[1]:null; document.getElementById('scope').textContent=`Scope: ${exp||'root'}`;
-    const api = (p)=> `${origin}${exp?`/exp/${exp}`:''}${p}`;
+    const origin=location.origin;
+    const api = (p)=> `${origin}${p}`;
 
     const cards = document.getElementById('cards');
     const status = document.getElementById('status');
@@ -68,7 +68,7 @@
           <div class="head">
             <span class="pill">${new Date(row.ts).toLocaleTimeString()}</span>
             <span class="pill">${row.student_id||''}</span>
-            <span class="pill">${row.experiment_name||''}</span>
+            <span class="pill">${(row.trial||row.experiment_name)||''}</span>
             <span class="fn">${row.func_name||''}</span>
           </div>
           <div class="mono" style="margin-top:6px">args: ${row.args_json||''}</div>
@@ -80,8 +80,10 @@
     }
 
     document.getElementById('apply').onclick = async ()=>{ const logs = await fetchLogs(); render(logs); };
-    (async()=>{ const logs = await fetchLogs(); render(logs); })();
+    (async()=>{ 
+      try { const res = await fetch(`${origin}/api/active-experiment`); const d = await res.json(); document.getElementById('active').textContent = `Active: ${d.active || 'none'}`; } catch {}
+      const logs = await fetchLogs(); render(logs); 
+    })();
   </script>
 </body>
 </html>
-

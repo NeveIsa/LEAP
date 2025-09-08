@@ -26,18 +26,27 @@ class RPCClient:
     """A client for the Classroom RPC Server."""
 
     def __init__(self, server_url: str, student_id: str, trial_name: str | None = None, experiment_name: str | None = None):
-        """Initializes the client with the server URL, student ID, and optional trial name.
+        """Initializes the client with the server URL, student ID, optional trial name, and experiment name.
 
-        'trial_name' replaces the older 'experiment_name' tag used to label runs.
-        For backward compatibility, if 'trial_name' is None and 'experiment_name' is provided,
-        it will be used.
+        If experiment_name is not provided, the client will attempt to detect the active experiment via
+        GET /api/active-experiment; if unavailable, it falls back to the DEFAULT_EXPERIMENT env var.
         """
         self.server_url = server_url.rstrip('/')
         self.student_id = student_id
-        self.trial_name = trial_name if trial_name is not None else experiment_name
-        self.experiment_name = experiment_name
+        self.trial_name = trial_name
+        self.experiment_name = experiment_name or self._detect_active_experiment()
         self._function_cache = {}
         self._discover_functions()
+
+    def _detect_active_experiment(self) -> str | None:
+        try:
+            resp = requests.get(f"{self.server_url}/api/active-experiment", timeout=5)
+            if resp.ok:
+                data = resp.json()
+                return data.get("active")
+        except Exception:
+            pass
+        return os.environ.get('DEFAULT_EXPERIMENT')
 
     def _discover_functions(self):
         """Fetches the list of available functions from the server."""
@@ -67,7 +76,7 @@ class RPCClient:
                     "args": args,
                     # Preferred new key
                     "trial": self.trial_name,
-                    # Explicit experiment context; must match the active experiment on the server
+                    # Explicit experiment context (required by server)
                     "experiment_name": self.experiment_name,
                 }
                 try:
@@ -252,8 +261,8 @@ class RPCClient:
 if __name__ == '__main__':
     SERVER_URL = "http://localhost:9000"
     STUDENT_ID = "s001"  # Make sure this student ID is registered on the server
-    TRIAL = "bisection-demo"  # Optional run label (was 'experiment')
-    EXPERIMENT_NAME = os.environ.get('DEFAULT_EXPERIMENT', 'default')
+    TRIAL = "bisection-demo"  # Optional run label
+    EXPERIMENT_NAME = None  # Auto-detect active if None
 
     print(f"Initializing client for student '{STUDENT_ID}' at {SERVER_URL}\n")
     try:

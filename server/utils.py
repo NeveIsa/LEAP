@@ -11,11 +11,18 @@ from fastapi.encoders import jsonable_encoder
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi import FastAPI, HTTPException, Depends, status, Query, Request, Response
+import logging
 from fastapi.staticfiles import StaticFiles
 from typing import Literal, Any, Optional, Dict
 from pydantic import BaseModel
 import datetime
-from .storage_orm import Storage
+try:
+    from .storage_orm import Storage  # when imported as package (server.utils)
+except ImportError:  # pragma: no cover
+    from storage_orm import Storage  # when imported as script (utils)
+import hashlib
+import hmac
+import os
 
 
 def enc(obj: Any) -> str:
@@ -65,23 +72,106 @@ def load_functions_from_directory(directory: str) -> Dict[str, Callable[..., Any
     return funcs
 
 
-def load_admin_credentials(admin_creds_path: str) -> tuple[str, str]:
+def _pbkdf2(password: str, salt: bytes, iterations: int = 240_000, algo: str = "sha256") -> bytes:
+    return hashlib.pbkdf2_hmac(algo, password.encode("utf-8"), salt, iterations)
+
+def make_password_hash(password: str, *, iterations: int = 240_000, algo: str = "sha256", salt: Optional[bytes] = None) -> Dict[str, Any]:
+    salt = salt or os.urandom(16)
+    dk = _pbkdf2(password, salt, iterations, algo)
+    return {
+        "algorithm": f"pbkdf2_{algo}",
+        "iterations": iterations,
+        "salt": salt.hex(),
+        "password_hash": dk.hex(),
+    }
+
+def _build_verifier_from_record(record: Dict[str, Any]):
+    algo = record.get("algorithm", "pbkdf2_sha256")
+    if not algo.startswith("pbkdf2_"):
+        # default
+        algo_name = "sha256"
+    else:
+        _, algo_name = algo.split("_", 1)
+    try:
+        iterations = int(record.get("iterations", 240_000))
+    except Exception:
+        iterations = 240_000
+    try:
+        salt = bytes.fromhex(record["salt"]) if isinstance(record.get("salt"), str) else b""
+        pwd_hash = bytes.fromhex(record["password_hash"]) if isinstance(record.get("password_hash"), str) else b""
+    except Exception:
+        salt, pwd_hash = b"", b""
+
+    def verify(pw: str) -> bool:
+        if not salt or not pwd_hash:
+            return False
+        dk = _pbkdf2(pw, salt, iterations, algo_name)
+        return hmac.compare_digest(dk, pwd_hash)
+
+    return verify
+
+def load_admin_credentials(admin_creds_path: str) -> tuple[str, callable]:
+    """Return (username, verify_fn) for admin auth.
+    
+    Automatically migrates plaintext passwords to hashed format when detected.
+
+    - Supports env ADMIN_USERNAME/ADMIN_PASSWORD (hashed in-memory)
+    - JSON file supports:
+        {"username": "...", "password_hash": "...", "salt": "...", "iterations": 240000, "algorithm": "pbkdf2_sha256"}
+      Legacy plaintext {"username": "...", "password": "..."} is automatically migrated to hashed format.
+    """
     env_user = os.environ.get("ADMIN_USERNAME")
     env_pass = os.environ.get("ADMIN_PASSWORD")
     if env_user and env_pass:
-        return env_user, env_pass
+        rec = make_password_hash(env_pass)
+        return env_user, _build_verifier_from_record(rec)
+
     try:
         if os.path.isfile(admin_creds_path):
             with open(admin_creds_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             if isinstance(data, dict):
-                username = data.get("username") or data.get("user")
+                username = data.get("username") or data.get("user") or "admin"
+                
+                # Check if already hashed
+                if data.get("password_hash") and data.get("salt"):
+                    return username, _build_verifier_from_record(data)
+                
+                # Auto-migrate plaintext password to hashed format
                 password = data.get("password") or data.get("pass")
-                if username and password:
-                    return username, password
-    except Exception:
+                if password:
+                    print(f"🔐 Migrating plaintext password to hashed format for: {admin_creds_path}")
+                    rec = make_password_hash(password)
+                    
+                    # Create new hashed credentials
+                    hashed_data = {
+                        "username": username,
+                        "algorithm": rec["algorithm"],
+                        "iterations": rec["iterations"],
+                        "salt": rec["salt"],
+                        "password_hash": rec["password_hash"]
+                    }
+                    
+                    # Write back to file securely
+                    try:
+                        with open(admin_creds_path, "w", encoding="utf-8") as f:
+                            json.dump(hashed_data, f, indent=2)
+                        print(f"✅ Password migration completed for: {admin_creds_path}")
+                    except Exception as e:
+                        print(f"⚠️  Could not write hashed credentials to {admin_creds_path}: {e}")
+                        print("   Continuing with in-memory hash (password will need migration again next time)")
+                    
+                    return username, _build_verifier_from_record(rec)
+                
+                return username, (lambda _pw: False)
+    except Exception as e:
+        print(f"⚠️  Error loading credentials from {admin_creds_path}: {e}")
         pass
-    return ("admin", "password")
+    
+    # Default dev creds (weak) — recommend overriding in production
+    print("🔓 Using default development credentials (admin/password) - change for production!")
+    rec = make_password_hash("password")
+    return "admin", _build_verifier_from_record(rec)
 
 
 class NoCacheHTMLMiddleware(BaseHTTPMiddleware):
@@ -94,6 +184,30 @@ class NoCacheHTMLMiddleware(BaseHTTPMiddleware):
             response.headers['Pragma'] = 'no-cache'
             response.headers['Expires'] = '0'
         return response
+
+class ActiveExperimentUIGuard(BaseHTTPMiddleware):
+    def __init__(self, app, *, experiment_name: str, current_active: callable):
+        super().__init__(app)
+        self.experiment_name = experiment_name
+        self.current_active = current_active
+
+    async def dispatch(self, request, call_next):
+        try:
+            path = request.url.path or ''
+            active = self.current_active()
+            # The middleware sees full paths like /exp/looplab/admin/login, not relative paths
+            is_admin_path = f'/exp/{self.experiment_name}/admin' in path
+            
+            # Block all access when experiment is not active, except admin endpoints for authentication
+            if not is_admin_path:
+                logging.debug(f"ActiveExperimentUIGuard: path={path}, experiment={self.experiment_name}, active={active}")
+                if active != self.experiment_name:
+                    logging.info(f"Blocking access to {self.experiment_name} - not active (active: {active})")
+                    from starlette.responses import RedirectResponse
+                    return RedirectResponse(url='/', status_code=307)
+        except Exception as e:
+            logging.warning(f"ActiveExperimentUIGuard exception for {self.experiment_name}: {e}")
+        return await call_next(request)
 
 
 def build_experiment_app(
@@ -115,25 +229,28 @@ def build_experiment_app(
 
     db_path = os.path.join(experiment_dir, "db/students.db")
     if not os.path.exists(db_path):
-        print(f"Warning: Database file not found at {db_path}. A new one will be created.")
+        logging.info("Database file not found at %s. A new one will be created.", db_path)
     funcs_dir = os.path.join(experiment_dir, "funcs")
     ui_dir = os.path.join(experiment_dir, "ui")
     admin_creds_path = os.path.join(experiment_dir, "admin_credentials.json")
 
-    print(f"Creating app for experiment '{experiment_name}' with db_path: {db_path}")
+    logging.debug("Creating app for experiment '%s' with db_path: %s", experiment_name, db_path)
     storage = Storage(db_path)
     function_registry = load_functions_from_directory(funcs_dir)
 
     app = FastAPI(title=f"Experiment: {experiment_name}")
     app.mount("/ui", StaticFiles(directory=ui_dir), name="ui")
     app.add_middleware(NoCacheHTMLMiddleware)
+    app.add_middleware(ActiveExperimentUIGuard, experiment_name=experiment_name, current_active=current_active)
     app.add_middleware(SessionMiddleware, secret_key=session_secret, **session_cookie_opts)
 
-    ADMIN_USERNAME, ADMIN_PASSWORD = load_admin_credentials(admin_creds_path)
+    # Minimal per-experiment admin endpoints so each experiment can own its credentials.
+    # Session cookie is shared (path=/), so logging in here authenticates root admin APIs.
+    ADMIN_USERNAME, ADMIN_VERIFY = load_admin_credentials(admin_creds_path)
 
     @app.post("/admin/login")
     async def login(request: Request):
-        """Accept JSON or form body with username/password."""
+        """Per-experiment admin login (JSON or form)."""
         username = password = None
         try:
             data = await request.json()
@@ -147,148 +264,30 @@ def build_experiment_app(
                 password = form.get("password")
             except Exception:
                 pass
-        if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
-            request.session["authenticated"] = True
+        if username == ADMIN_USERNAME and ADMIN_VERIFY(password or ""):
+            # Scope authentication to this experiment; root APIs will check this map.
+            auth_map = request.session.get("auth_experiments") or {}
+            auth_map[experiment_name] = True
+            request.session["auth_experiments"] = auth_map
             return {"message": "Login successful"}
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-    def is_admin_authenticated(request: Request):
-        if not request.session.get("authenticated"):
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-        return True
-
     @app.post("/admin/logout")
     async def logout(request: Request, response: Response):
-        request.session.clear()
-        response.delete_cookie("session")
+        # Remove auth only for this experiment
+        try:
+            auth_map = request.session.get("auth_experiments") or {}
+            if experiment_name in auth_map:
+                auth_map.pop(experiment_name, None)
+                request.session["auth_experiments"] = auth_map
+        except Exception:
+            pass
         return {"message": "Logged out"}
 
-    def _require_active_this_experiment():
-        active = current_active()
-        if active is None:
-            raise HTTPException(status_code=409, detail="No active experiment. Start it from the landing page.")
-        if active != experiment_name:
-            raise HTTPException(status_code=409, detail=f"Experiment '{active}' is active. Open that UI or stop it first.")
-        return True
-
-    @app.post("/admin/reload-functions", dependencies=[Depends(is_admin_authenticated), Depends(_require_active_this_experiment)])
-    def admin_reload_functions():
-        nonlocal function_registry
-        function_registry = load_functions_from_directory(funcs_dir)
-        return {"status": "ok", "functions": len(function_registry)}
-
     @app.get("/admin/ping")
-    async def admin_ping(authenticated: bool = Depends(is_admin_authenticated)):
+    async def admin_ping():
         return {"ok": True}
 
-    @app.get("/functions")
-    def list_functions():
-        return {
-            name: {
-                "signature": str(inspect.signature(fn)),
-                "doc": (fn.__doc__ or "").strip()
-            }
-            for name, fn in function_registry.items()
-        }
-
-    # Students list requires admin + active experiment
-    @app.get("/students", dependencies=[Depends(is_admin_authenticated), Depends(_require_active_this_experiment)])
-    def list_students_admin():
-        return {"students": storage.list_students()}
-
-    class CallRequest(BaseModel):
-        student_id: str
-        func_name: str
-        args: list[Any] = []
-        trial: Optional[str] = None
-        experiment: Optional[str] = None
-        experiment_name: Optional[str] = None
-
-    @app.post("/call")
-    def call_function(req: CallRequest):
-        # Enforce experiment context: only allow calls when THIS experiment is active
-        active = current_active()
-        if active is None:
-            raise HTTPException(status_code=409, detail="No active experiment. Start one from the landing page.")
-        if active != experiment_name:
-            raise HTTPException(status_code=409, detail=f"Experiment '{active}' is active. Open that UI or stop it first.")
-        if req.experiment_name and req.experiment_name != experiment_name:
-            raise HTTPException(status_code=409, detail=f"Mismatched experiment context. Expected '{experiment_name}', got '{req.experiment_name}'.")
-        if req.func_name not in function_registry:
-            raise HTTPException(status_code=404, detail=f"Function '{req.func_name}' not found")
-        if not storage.student_exists(req.student_id):
-            raise HTTPException(status_code=403, detail=f"Invalid student ID '{req.student_id}'")
-
-        fn = function_registry[req.func_name]
-        trial_name = req.trial or req.experiment
-        try:
-            result = invoke_and_log(
-                storage=storage, fn=fn, func_name=req.func_name,
-                args=req.args, student_id=req.student_id, trial=trial_name,
-            )
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Function execution error: {e}")
-        return {"result": jsonable_encoder(result)}
-
-    class AddStudentBody(BaseModel):
-        student_id: str
-        name: str
-        email: Optional[str] = None
-
-    @app.post("/admin/add-student", dependencies=[Depends(is_admin_authenticated), Depends(_require_active_this_experiment)])
-    def add_student(body: AddStudentBody):
-        storage.add_student(student_id=body.student_id, name=body.name, email=body.email)
-        return {"status": "ok"}
-
-    @app.get("/admin/students", dependencies=[Depends(is_admin_authenticated), Depends(_require_active_this_experiment)])
-    def list_all_students():
-        return {"students": storage.list_students()}
-
-    @app.delete("/admin/student/{student_id}", status_code=200, dependencies=[Depends(is_admin_authenticated), Depends(_require_active_this_experiment)])
-    def remove_student(student_id: str):
-        was_deleted = storage.delete_student(student_id)
-        if not was_deleted:
-            raise HTTPException(status_code=404, detail=f"Student ID '{student_id}' not found.")
-        return {"status": "ok", "message": f"Student '{student_id}' and all associated logs have been deleted."}
-
-    @app.get("/admin/logs", dependencies=[Depends(is_admin_authenticated), Depends(_require_active_this_experiment)])
-    def get_server_logs(
-        student_id: Optional[str] = Query(None),
-        experiment_name: Optional[str] = Query(None),
-        trial: Optional[str] = Query(None),
-        n: int = Query(100, ge=1, le=1000),
-        order: Literal["latest", "earliest"] = Query("latest"),
-    ):
-        eff_trial = trial or experiment_name
-        logs = storage.fetch_logs(student_id=student_id, experiment_name=eff_trial, n=n, order=order)
-        return {"logs": logs}
-
-    @app.get("/logs", dependencies=[Depends(_require_active_this_experiment)])
-    def get_logs(
-        student_id: Optional[str] = Query(None),
-        experiment_name: Optional[str] = Query(None),
-        sid: Optional[str] = Query(None),
-        exp: Optional[str] = Query(None),
-        trial: Optional[str] = Query(None),
-        trial_name: Optional[str] = Query(None),
-        n: int = Query(100, ge=1, le=1000),
-        order: Literal["latest", "earliest"] = Query("latest"),
-        start_time: Optional[datetime.datetime] = Query(None),
-        end_time: Optional[datetime.datetime] = Query(None),
-    ):
-        eff_student, eff_experiment = resolve_log_filters(
-            student_id=student_id, sid=sid,
-            experiment_name=experiment_name, exp=exp,
-            trial=trial, trial_name=trial_name,
-        )
-        logs = storage.fetch_logs(
-            student_id=eff_student,
-            experiment_name=eff_experiment,
-            n=n,
-            order=order,
-            start_time=start_time,
-            end_time=end_time,
-        )
-        return {"logs": logs}
-
+    # Note: other per-experiment APIs are intentionally omitted to avoid tight coupling.
+    # All client/admin operations (students/logs/call) are provided at root and scoped to the active experiment.
     return app

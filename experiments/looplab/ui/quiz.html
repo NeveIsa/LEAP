@@ -21,7 +21,7 @@
     <div class="top">
       <a class="link" href="dashboard.html">← Back</a>
       <div class="spacer"></div>
-      <span id="scope" class="badge">Scope</span>
+      <span id="active" class="badge">Active: …</span>
     </div>
 
     <div class="card" style="margin-bottom:12px">
@@ -33,16 +33,24 @@
       <div class="msg">Answers are logged immediately when you submit.</div>
     </div>
 
+    <div class="card" style="margin-bottom:12px">
+      <div class="row">
+        <button id="statsBtn" class="btn">Show Answer Statistics</button>
+        <span id="statsStatus" class="msg" style="margin-left:10px;"></span>
+      </div>
+    </div>
+
     <div id="qs" class="stack"></div>
   </div>
 
   <script>
     const origin = location.origin; const m = location.pathname.match(/\/exp\/([^\/]+)/); const exp = m? m[1]: null;
-    document.getElementById('scope').textContent = `Scope: ${exp||'root'}`;
+    (async()=>{ try{ const r=await fetch(`${origin}/api/active-experiment`); const d=await r.json(); document.getElementById('active').textContent = `Active: ${d.active || 'none'}`; }catch{} })();
     const qsEl = document.getElementById('qs');
     const sidEl = document.getElementById('sid');
     const trialEl = document.getElementById('trial');
     const regEl = document.getElementById('reg');
+    const api = (p)=> `${origin}${p}`;
 
     // Persist student id
     sidEl.value = localStorage.getItem('looplab.quiz.sid') || '';
@@ -50,24 +58,119 @@
     trialEl.value = localStorage.getItem('looplab.quiz.trial') || '';
     trialEl.addEventListener('input', ()=> localStorage.setItem('looplab.quiz.trial', trialEl.value.trim()));
 
-    async function checkReg(){
-      const sid = sidEl.value.trim(); if(!sid){ regEl.textContent='—'; return; }
-      try{ const r = await fetch(`${origin}/is-registered?student_id=${encodeURIComponent(sid)}`);
-        if(!r.ok){ regEl.textContent='?'; return; }
-        const d = await r.json(); regEl.textContent = d.registered? 'registered' : 'not registered';
-      }catch{ regEl.textContent='?'; }
-    }
-    sidEl.addEventListener('blur', checkReg); checkReg();
+    // Registration status is experiment-scoped and may require admin; show unknown and rely on submit error if not registered.
+    regEl.textContent = 'unknown';
 
-    const QUESTIONS = [
-      { id: 'q1', text: 'Which method finds roots by halving intervals?', choices: [ 'Newton-Raphson', 'Secant', 'Bisection', 'Fixed-point' ], correct: 2 },
-      { id: 'q2', text: 'Derivative of x^2 is:', choices: [ 'x', '2x', 'x^3', 'constant' ], correct: 1 },
-      { id: 'q3', text: 'Matrix multiplication A(m×n)·B(n×p) yields shape:', choices: [ 'm×n', 'n×p', 'm×p', 'p×m' ], correct: 2 },
-    ];
+    let QUESTIONS = [];
+
+    // Parse markdown questions
+    async function loadQuestions() {
+      console.log('loadQuestions() called');
+      try {
+        console.log('Fetching questions.md...');
+        const response = await fetch('questions.md');
+        console.log('Response status:', response.status, response.ok);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const markdown = await response.text();
+        console.log('Received markdown, length:', markdown.length);
+        console.log('First 200 chars of markdown:', markdown.substring(0, 200));
+        
+        QUESTIONS = parseMarkdownQuestions(markdown);
+        console.log('Final QUESTIONS array length:', QUESTIONS.length);
+      } catch (error) {
+        console.error('Failed to load questions:', error);
+        console.log('Using fallback hardcoded questions');
+        // Fallback to hardcoded questions
+        QUESTIONS = [
+          { id: 'q1', text: 'Which method finds roots by halving intervals?', choices: [ 'Newton-Raphson', 'Secant', 'Bisection', 'Fixed-point' ], correct: 2 },
+          { id: 'q2', text: 'Derivative of x^2 is:', choices: [ 'x', '2x', 'x^3', 'constant' ], correct: 1 },
+          { id: 'q3', text: 'Matrix multiplication A(m×n)·B(n×p) yields shape:', choices: [ 'm×n', 'n×p', 'm×p', 'p×m' ], correct: 2 },
+        ];
+      }
+    }
+
+    function parseMarkdownQuestions(markdown) {
+      const questions = [];
+      // Split by question headers - capture both question number and ID
+      const sections = markdown.split(/^## Question \d+: (\w+)/m);
+      
+      console.log('Split into', sections.length, 'sections');
+      
+      // Process each section (sections[0] is the content before first question)
+      for (let i = 1; i < sections.length; i += 2) {
+        const id = sections[i]; // The captured ID (q1, q2, etc.)
+        const content = sections[i + 1]; // The content after the ID
+        
+        console.log('Processing question ID:', id);
+        if (!content) {
+          console.log('No content for', id);
+          continue;
+        }
+        
+        const lines = content.trim().split('\n');
+        
+        // Find question text (bold text)
+        let text = '';
+        for (const line of lines) {
+          const match = line.match(/\*\*(.*?)\*\*/);
+          if (match) {
+            text = match[1];
+            break;
+          }
+        }
+        
+        console.log('Question text for', id, ':', text);
+        if (!text) continue;
+        
+        // Extract choices and find correct answer
+        const choices = [];
+        let correct = -1;
+        
+        lines.forEach((line, lineIdx) => {
+          // Match A) B) C) D) patterns with optional checkmark
+          const choiceMatch = line.match(/^[A-Z]\)\s*(.*?)$/);
+          if (choiceMatch) {
+            let choiceText = choiceMatch[1].trim();
+            const hasCheckmark = choiceText.includes('✓');
+            
+            // Remove checkmark from choice text
+            if (hasCheckmark) {
+              choiceText = choiceText.replace(/\s*✓\s*$/, '').trim();
+              correct = choices.length; // This will be the index after we push
+            }
+            
+            choices.push(choiceText);
+            console.log(`Choice ${choices.length}: "${choiceText}" ${hasCheckmark ? '(CORRECT)' : ''}`);
+          }
+        });
+        
+        console.log(`Question ${id}: ${choices.length} choices, correct=${correct}`);
+        
+        if (choices.length > 0 && correct >= 0) {
+          questions.push({ id, text, choices, correct });
+          console.log(`Added question ${id}`);
+        }
+      }
+      
+      console.log(`Parsed ${questions.length} questions from markdown`);
+      return questions;
+    }
 
     function render(){
+      console.log('render() called with', QUESTIONS.length, 'questions');
       qsEl.innerHTML='';
+      
+      if (QUESTIONS.length === 0) {
+        qsEl.innerHTML = '<div style="text-align:center;padding:20px;color:orange;">No questions loaded! Check console for errors.</div>';
+        return;
+      }
+      
       QUESTIONS.forEach((q, idx)=>{
+        console.log('Rendering question', idx+1, ':', q.text);
         const wrap = document.createElement('div'); wrap.className='q';
         const title = document.createElement('h3'); title.textContent = `${idx+1}. ${q.text}`; wrap.appendChild(title);
         const choices = document.createElement('div'); choices.className='choices';
@@ -91,7 +194,10 @@
           const choiceIdx = Number(sel.value);
           const payload = { kind:'quiz', qid:q.id, question:q.text, choice_index: choiceIdx, choice_text: q.choices[choiceIdx], ts: new Date().toISOString() };
           try{
-            const res = await fetch(`${origin}/call`,{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ student_id: sid, func_name: 'echo', args: [payload], trial: trial || undefined })});
+            // Root /call requires experiment_name; verify against active
+            let experiment_name = '';
+            try { const r = await fetch(`${origin}/api/active-experiment`); if (r.ok) { const d = await r.json(); experiment_name = d.active || ''; } } catch {}
+            const res = await fetch(`${origin}/call`,{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ student_id: sid, func_name: 'echo', args: [payload], trial: trial || undefined, experiment_name })});
             if(!res.ok){ let t=''; try{ const d = await res.json(); t = typeof d.detail==='string'? d.detail: JSON.stringify(d.detail);}catch{ try{ t = await res.text(); }catch{} } throw new Error(t||`HTTP ${res.status}`); }
             msg.textContent='Logged'; msg.className='msg ok';
           }catch(e){ msg.textContent = e.message || String(e); msg.className='msg err'; }
@@ -100,8 +206,19 @@
         qsEl.appendChild(wrap);
       });
     }
-    render();
+    // Initialize the quiz
+    (async () => {
+      qsEl.innerHTML = '<div style="text-align:center;padding:20px;">Loading questions...</div>';
+      try {
+        await loadQuestions();
+        console.log('Loaded questions:', QUESTIONS);
+        render();
+      } catch (error) {
+        console.error('Failed to initialize quiz:', error);
+        qsEl.innerHTML = '<div style="text-align:center;padding:20px;color:red;">Failed to load questions. Using fallback questions.</div>';
+        setTimeout(() => render(), 1000);
+      }
+    })();
   </script>
 </body>
 </html>
-
