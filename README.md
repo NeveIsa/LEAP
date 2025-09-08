@@ -1,57 +1,41 @@
 # Interactive Classroom for Numerical Methods
 
-This project provides a client-server framework for teaching numerical optimization and root-finding techniques. Students use a client to remotely call and test mathematical functions. The server executes the functions, logs every attempt to a database, and provides a foundation for a real-time dashboard to visualize student progress.
+A FastAPI-based server and simple Python client for teaching and experimenting with numerical methods. Instructors publish Python functions; students call them over HTTP. Every call is logged to a local DuckDB database and can be visualized via a lightweight UI.
 
-## Features
+## Highlights
 
-- **JSON-RPC Style API Server**: A robust server built with FastAPI that exposes numerical functions.
-- **Dynamic Function Loading**: Instructors can add new Python functions on the fly, and the server automatically makes them available to students.
-- **Persistent Logging**: Logs all student submissions (arguments, results, and errors) to a local DuckDB database.
-- **Simple Student Client**: An intuitive Python client that abstracts away API calls, allowing students to call remote functions as if they were local.
-- **SQLAlchemy ORM**: Clean and robust database interaction layer.
-- **Dashboard Ready**: Includes a Marimo notebook to easily build a real-time monitoring dashboard.
-- **Security**: Supports PBKDF2-hashed admin passwords; legacy plaintext files still work.
+- HTTP+JSON API with FastAPI; easy to call from any language
+- Dynamic function loading from `experiments/<name>/funcs/*.py`
+- Persistent logging (args, results, errors) via SQLAlchemy + DuckDB
+- Simple student client (`client/client.py`) for quick onboarding
+- Per‑experiment admin login; landing page to launch/stop experiments
+- PBKDF2‑hashed credentials with auto‑migration from plaintext
 
-Hashed admin_credentials.json (example)
---------------------------------------
-Use this format in `experiments/<experiment>/admin_credentials.json`:
+## Project Layout
 
-```
-{
-  "username": "admin",
-  "password_hash": "5f0d...",   
-  "salt": "9ab3...",
-  "iterations": 240000,
-  "algorithm": "pbkdf2_sha256"
-}
-```
+- `server/` – FastAPI app and utilities
+- `client/` – Example Python client
+- `experiments/<name>/` – Experiment bundles:
+  - `funcs/` public instructor functions
+  - `ui/` HTML dashboard/pages
+  - `db/` local DuckDB file (created on first run)
+  - `admin_credentials.json` per‑experiment admin account
 
-Tip: You can temporarily set `ADMIN_USERNAME`/`ADMIN_PASSWORD` in the environment; the server will hash them in-memory on startup and accept those credentials.
+## Quick Start
 
-## Tech Stack
+Prerequisites: Python 3.10+ recommended
 
-- Python
-- FastAPI (for the server)
-- Uvicorn (to run the server)
-- SQLAlchemy 2.0 (for the database ORM)
-- DuckDB (for the database engine)
-- Marimo (for the dashboard)
+- Install dependencies: `pip install -r req.txt`
+- Run the server: `make` or `uvicorn server.rpc_server:app --host 0.0.0.0 --port 9000`
+- Open the landing page: `http://localhost:9000/`
+- Click Launch next to an experiment (e.g., `default`) and log in
+- Open the experiment UI from the table (e.g., `/exp/default/ui/dashboard.html`)
 
-## Setup and Usage
+Tip: Use `DEFAULT_EXPERIMENT=default` to set which experiment root APIs bind to.
 
-### 1. Installation
+## Admin Credentials
 
-First, install the required Python packages:
-
-```bash
-pip install -r req.txt
-```
-
-### 2. Configure Admin Credentials (per experiment)
-
-Each experiment has credentials at: `experiments/<experiment>/admin_credentials.json`.
-
-Recommended (hashed) format:
+Recommended hashed format in `experiments/<exp>/admin_credentials.json`:
 
 ```
 {
@@ -63,191 +47,78 @@ Recommended (hashed) format:
 }
 ```
 
-Legacy plaintext is still accepted and will be hashed in-memory:
+- Legacy `{ "username": "...", "password": "..." }` is auto‑migrated to the hashed format on first read.
+- You can override via environment for development: `ADMIN_USERNAME`, `ADMIN_PASSWORD`.
+- Default dev creds are `admin` / `password` (do not use in production).
 
-```
-{ "username": "admin", "password": "password" }
-```
+## Running and Using
 
-You can override with environment variables `ADMIN_USERNAME` and `ADMIN_PASSWORD` (useful for development). These are hashed in-memory at startup.
+- Start: `make` or `uvicorn server.rpc_server:app --host 0.0.0.0 --port 9000`
+- Health: `GET /api/health` → `{ ok, active, version }`
+- List experiments: `GET /api/experiments`
+- Start/stop active experiment from the landing page or via `/api/experiments/*` endpoints
 
-Example:
+Root endpoints operate on the active experiment and require explicit `experiment_name` when calling functions:
 
-```
-export ADMIN_USERNAME=admin
-export ADMIN_PASSWORD=change-me
-```
+- `GET /functions` – list available functions and signatures
+- `POST /call` – invoke a function and log the result
+- `GET /logs` – query logs with filters (see below)
+- `GET /log-options` – list distinct students and trials
+- `GET /is-registered?student_id=<id>` – check registration
+- `POST /admin/*` – admin actions (login, add students, etc.)
 
-Note: The default dev creds are `admin` / `password`. Change these in production.
+Sample `/call` payload:
 
-### 3. Run the Server
-
-Start the FastAPI server from the repository root (recommended):
-
-```bash
-uvicorn server.rpc_server:app --host 0.0.0.0 --port 9000
-```
-
-Root APIs bind to a default experiment (preferred name: `experiments/default`).
-You can select which experiment powers the root endpoints via `DEFAULT_EXPERIMENT`.
-
-Examples:
-
-```
-# Use the renamed default experiment directory
-export DEFAULT_EXPERIMENT=default
-
-# or, fall back to the legacy name
-export DEFAULT_EXPERIMENT=default_experiment
+```json
+{
+  "student_id": "s001",
+  "func_name": "square",
+  "args": [7],
+  "experiment_name": "default",
+  "trial": "bisection-demo"
+}
 ```
 
-Endpoints at root include: `/functions`, `/call`, `/logs`, `/log-options`, and admin endpoints under `/admin/*`.
-Per-experiment apps are served under `/exp/<experiment>/...`.
+## Logs and Filters
 
-Dynamic experiments
--------------------
-- You can add new experiment folders under `experiments/<name>` at any time. Each experiment must have this structure:
-  - `db/students.db` (created on first run),
-  - `funcs/*.py` (instructor functions),
-  - `ui/` (HTML dashboard/pages),
-  - `admin_credentials.json` (experiment’s admin login).
-- Launching a new experiment from the landing page mounts it dynamically without restarting the server.
-
-Health
-------
-- Check server health and status: `GET /api/health` → `{ ok, active, version }`.
-
-Quick Guide (Launch + Access)
------------------------------
-- Launch an experiment:
-  1) Open `http://localhost:9000/` and click Launch for `<experiment>`.
-  2) Inline login prompts for credentials from `experiments/<experiment>/admin_credentials.json`.
-  3) On success, the row shows Active. Click “Open UI” to open `/exp/<experiment>/ui/dashboard.html` in a new tab.
-- Access model:
-  - Dashboard: visible without login (shows auth badge and Login/Logout).
-  - Students: requires login; shows a message if not authenticated.
-  - Logs: read-only, public when active; shows a message if not active.
-  - Random Actions: public; requires active experiment and a registered `student_id`.
-- Admin API examples (per experiment):
-  - Login: `POST /exp/<experiment>/admin/login` with `{ "username": "...", "password": "..." }` (JSON or form-encoded).
-  - List students: `GET /exp/<experiment>/admin/students` (requires login + active experiment).
-  - Add student: `POST /exp/<experiment>/admin/add-student` with `{ "student_id": "s001", "name": "Alice" }`.
-  - Delete student: `DELETE /exp/<experiment>/admin/student/s001`.
-  - Delete a student's logs: `DELETE /exp/<experiment>/admin/logs/student/s001`.
-  - Reload functions from `funcs/`: `POST /exp/<experiment>/admin/reload-functions`.
-  - View logs (public): `GET /exp/<experiment>/logs?n=100`.
-
-  Root equivalents (bound to `DEFAULT_EXPERIMENT`): use the same paths without `/exp/<experiment>`, e.g. `DELETE /admin/logs/student/s001`.
-
-Client notes
-------------
-- Students call the root endpoints (`/functions`, `/call`, `/logs`). Calls use the currently active experiment on the server — no need to send the experiment name from the client.
-- Tag runs with `trial` (formerly `experiment`). The server stores this tag under `experiment_name` in the DB for compatibility.
-- Check registration: `GET /is-registered?student_id=<id>` returns `{ registered: true|false }`.
-
-Logs and Filters
-----------------
-- Endpoints:
-  - Root: `GET /logs`
-  - Per-experiment: `GET /exp/<experiment>/logs`
 - Filters (query params):
   - Student: `student_id` or `sid`
   - Trial tag: `trial` or `trial_name` (legacy: `experiment` or `exp`)
-  - Time range: `start_time`, `end_time` as ISO 8601 (e.g., `2025-09-07T01:23:45Z`)
+  - Time range: `start_time`, `end_time` (ISO 8601)
   - Limit/order: `n` (1–1000), `order` = `latest` | `earliest`
-- Options endpoint: `GET /log-options` returns `{ students, experiments, trials }` to help build filters.
-- Admin-only list (requires login + active): `GET /admin/logs` (root or under `/exp/<experiment>`), accepts the same filters.
+- Examples:
+  - `curl 'http://localhost:9000/logs?sid=s001&trial=bisection-demo&n=50'`
+  - `curl 'http://localhost:9000/exp/default/logs?start_time=2025-09-07T00:00:00Z&end_time=2025-09-07T02:00:00Z'`
 
-Examples:
+## Adding Functions (Instructors)
 
-```bash
-# Root logs filtered by student + trial
-curl 'http://localhost:9000/logs?sid=s001&trial_name=bisection-demo&n=50&order=latest'
+- Drop public functions into `experiments/<exp>/funcs/*.py` (names not starting with `_`).
+- Functions are reloaded at runtime when you click “Reload” in the UI or hit the admin endpoint.
 
-# Per-experiment logs filtered by time window
-curl 'http://localhost:9000/exp/default/logs?start_time=2025-09-07T00:00:00Z&end_time=2025-09-07T02:00:00Z'
-```
-
-### 4. Register a Student
-
-Admin endpoints require a login session. Use the web UI or login via curl and reuse the session cookie.
-
-- Option A: Use the UI
-  1) Open `http://localhost:9000/`, click Launch for your experiment, and login when prompted (or visit `http://localhost:9000/ui/login.html` for the default experiment).
-  2) Go to the Dashboard → Student Management to add a student.
-
-- Option B: Use curl with cookies
-
-```bash
-# 1) Login and save session cookie
-curl -sS -c cookies.txt -X POST -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"password"}' \
-  http://localhost:9000/admin/login
-
-# 2) Add a student (name required, email optional)
-curl -sS -b cookies.txt -X POST -H "Content-Type: application/json" \
-  -d '{"student_id":"s001","name":"Alice","email":"alice@example.com"}' \
-  http://localhost:9000/admin/add-student
-```
-
-### 5. Run the Client
-
-The `client/client.py` file contains an example of how a student would interact with the server. It lists available functions and calls a few for demonstration.
-
-```bash
-python client/client.py
-```
-
-### 7. View the Dashboard
-
-- Admin UI: open `http://localhost:9000/ui/login.html`, then use the Dashboard to access Student Management and Log Visualization. When launching from the landing page, experiment-specific UIs live under `/exp/<experiment>/ui/...` and automatically scope API calls to that experiment.
-
-- Optional Marimo demo: there is a stub at `server/demo.py` you can open with `marimo edit server/demo.py`. If you use it, ensure it connects to the correct DB path (`db/students.db`).
-
-## How It Works
-
-### For Instructors: Adding New Functions
-
-Place Python files with public functions in the `experiments/<experiment_name>/funcs/` folder. Any function that does not start with an underscore `_` is automatically loaded by the server on startup and exposed to clients. You can change the folder with the `FUNCTIONS_DIR` environment variable.
-
-**Example:** Adding a simple cubic function to `funcs/functions.py`.
+Example (`experiments/default/funcs/functions.py`):
 
 ```python
-# in funcs/functions.py
-
 def cubic(x: float) -> float:
     """Return x^3."""
     return x * x * x
 ```
 
-### For Students: Using the Client
+## Student Client
 
-Students can use the `client/client.py` script as a template. They need to:
-1.  Set their `STUDENT_ID` at the top of the script.
-2.  Optionally set a `TRIAL` name/ID to tag their calls (e.g., "bisection-demo").
-3.  Use the `client` object to call any of the functions provided by the instructor.
-4.  The `client.help()` method can be used to list all available functions and their signatures.
+- Example client is in `client/client.py`.
+- Set `STUDENT_ID` and optionally `TRIAL`. Leave `EXPERIMENT_NAME=None` to auto‑detect active, or set explicitly.
+- Run with `python client/client.py`.
 
-```python
-# in client/client.py
+## Notes & Tips
 
-SERVER_URL = "http://localhost:9000"
-STUDENT_ID = "s001" # Change to your assigned ID
-TRIAL = "bisection-demo"  # Optional trial label
+- Databases: Local DuckDB files live under `experiments/<exp>/db/` and are ignored by Git.
+- Sessions: A secure random session secret is generated if `SESSION_SECRET_KEY` is not set. Set it for production.
+- CORS: Adjust `server/rpc_server.py` if you plan to call from browsers hosted elsewhere.
+- Dev flow: Most changes are hot‑reloaded by restarting Uvicorn; function additions require reload via admin.
 
-client = RPCClient(server_url=SERVER_URL, student_id=STUDENT_ID, trial_name=TRIAL)
+## Tech Stack
 
-# Get a list of available functions
-client.help()
-
-# Call a function (raises on error). Each call is logged with student_id and trial.
-try:
-    result = client.square(7)
-    print(f"Result: {result}")
-except Exception as e:
-    print(f"RPC error: {e}")
-```
-
-The client raises exceptions on failures (network/server/protocol) using `RPCError` subtypes. Logs include `student_id` and a `trial` tag (stored under `experiment_name` in the DB for compatibility).
-
-Compatibility note: The server still accepts the deprecated `experiment` parameter on `/call` and log filters; prefer the new `trial`/`trial_name` parameters going forward.
+- FastAPI, Uvicorn
+- SQLAlchemy 2.0, DuckDB (duckdb-engine)
+- Marimo (optional dashboard experiments)
+- Python client via `requests`
