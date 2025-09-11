@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Euler's Method Demo</title>
+    <link rel="stylesheet" href="style/main.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Euler's Method Interactive Demo</h1>
+            <span class="subtle">Explore different ODEs and step sizes</span>
+            <a href="dashboard.html" class="btn" style="float:right;">← Back to Dashboard</a>
+        </header>
+
+        <div class="content-section">
+            <h2>Problem Setup</h2>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="problem-type">Problem Type</label>
+                    <select id="problem-type" class="input">
+                        <option value="exponential_growth">Exponential Growth (dy/dt = y)</option>
+                        <option value="exponential_decay">Exponential Decay (dy/dt = -y)</option>
+                        <option value="logistic_growth">Logistic Growth (dy/dt = r*y*(1-y/K))</option>
+                        <option value="harmonic_oscillator">Harmonic Oscillator (dy/dt = -ω²y)</option>
+                        <option value="population_predation">Population with Predation (dy/dt = r*y - a*y²)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="y0">Initial Value (y₀)</label>
+                    <input type="number" id="y0" class="input" value="1.0" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label for="t0">Initial Time (t₀)</label>
+                    <input type="number" id="t0" class="input" value="0.0" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label for="h">Step Size (h)</label>
+                    <input type="number" id="h" class="input" value="0.1" step="0.01" min="0.001">
+                </div>
+                <div class="form-group">
+                    <label for="n-steps">Number of Steps</label>
+                    <input type="number" id="n-steps" class="input" value="50" min="1" max="1000">
+                </div>
+            </div>
+
+            <!-- Additional parameters for specific problems -->
+            <div id="additional-params" style="margin-top: 15px;">
+                <div class="form-row" id="logistic-params" style="display: none;">
+                    <div class="form-group">
+                        <label for="r">Growth Rate (r)</label>
+                        <input type="number" id="r" class="input" value="1.0" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label for="K">Carrying Capacity (K)</label>
+                        <input type="number" id="K" class="input" value="10.0" step="0.1">
+                    </div>
+                </div>
+                <div class="form-row" id="harmonic-params" style="display: none;">
+                    <div class="form-group">
+                        <label for="omega">Angular Frequency (ω)</label>
+                        <input type="number" id="omega" class="input" value="1.0" step="0.1">
+                    </div>
+                </div>
+                <div class="form-row" id="predation-params" style="display: none;">
+                    <div class="form-group">
+                        <label for="r-pred">Growth Rate (r)</label>
+                        <input type="number" id="r-pred" class="input" value="0.5" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label for="a">Predation Coefficient (a)</label>
+                        <input type="number" id="a" class="input" value="0.1" step="0.01">
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <button id="solve-btn" class="btn">Solve with Euler's Method</button>
+                <button id="compare-btn" class="btn">Compare Step Sizes</button>
+                <button id="clear-btn" class="btn">Clear Plot</button>
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>Solution Plot</h2>
+            <div style="position: relative; height: 400px;">
+                <canvas id="solution-chart"></canvas>
+            </div>
+            <div id="solution-info" class="mt-12 text-sm text-muted"></div>
+        </div>
+
+        <div class="content-section">
+            <h2>Step Size Comparison</h2>
+            <div style="position: relative; height: 400px;">
+                <canvas id="comparison-chart"></canvas>
+            </div>
+            <div id="comparison-info" class="mt-12 text-sm text-muted"></div>
+        </div>
+
+        <div class="content-section">
+            <h2>Student Information</h2>
+            <p class="text-muted mb-12">Enter your student ID to track your progress and log your solutions.</p>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="student-id">Student ID</label>
+                    <input type="text" id="student-id" class="input" placeholder="Enter your student ID" value="demo-user">
+                </div>
+                <div class="form-group">
+                    <label for="trial-name">Trial Name</label>
+                    <input type="text" id="trial-name" class="input" placeholder="e.g., euler-demo-1">
+                </div>
+                <button id="log-btn" class="btn">Log Current Solution</button>
+            </div>
+            <div id="log-status" class="mt-12 text-sm"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = window.location.origin;
+        
+        let solutionChart = null;
+        let comparisonChart = null;
+        let currentSolution = null;
+
+        // Initialize charts
+        function initCharts() {
+            const solutionCtx = document.getElementById('solution-chart').getContext('2d');
+            solutionChart = new Chart(solutionCtx, {
+                type: 'line',
+                data: { datasets: [] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { title: { display: true, text: 'Time (t)' } },
+                        y: { title: { display: true, text: 'y(t)' } }
+                    },
+                    plugins: {
+                        legend: { display: true },
+                        title: { display: true, text: 'Euler\'s Method Solution' }
+                    }
+                }
+            });
+
+            const comparisonCtx = document.getElementById('comparison-chart').getContext('2d');
+            comparisonChart = new Chart(comparisonCtx, {
+                type: 'line',
+                data: { datasets: [] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { title: { display: true, text: 'Time (t)' } },
+                        y: { title: { display: true, text: 'y(t)' } }
+                    },
+                    plugins: {
+                        legend: { display: true },
+                        title: { display: true, text: 'Step Size Comparison' }
+                    }
+                }
+            });
+        }
+
+        // Show/hide additional parameters based on problem type
+        function updateParameterVisibility() {
+            const problemType = document.getElementById('problem-type').value;
+            document.getElementById('logistic-params').style.display = problemType === 'logistic_growth' ? 'flex' : 'none';
+            document.getElementById('harmonic-params').style.display = problemType === 'harmonic_oscillator' ? 'flex' : 'none';
+            document.getElementById('predation-params').style.display = problemType === 'population_predation' ? 'flex' : 'none';
+        }
+
+        // Get parameters from form
+        function getParameters() {
+            const params = {
+                problem_type: document.getElementById('problem-type').value,
+                y0: parseFloat(document.getElementById('y0').value),
+                t0: parseFloat(document.getElementById('t0').value),
+                h: parseFloat(document.getElementById('h').value),
+                n_steps: parseInt(document.getElementById('n-steps').value)
+            };
+
+            // Add problem-specific parameters
+            if (params.problem_type === 'logistic_growth') {
+                params.r = parseFloat(document.getElementById('r').value);
+                params.K = parseFloat(document.getElementById('K').value);
+            } else if (params.problem_type === 'harmonic_oscillator') {
+                params.omega = parseFloat(document.getElementById('omega').value);
+            } else if (params.problem_type === 'population_predation') {
+                params.r_pred = parseFloat(document.getElementById('r-pred').value);
+                params.a = parseFloat(document.getElementById('a').value);
+            }
+
+            return params;
+        }
+
+        // Call the appropriate function based on problem type
+        async function solveProblem(params) {
+            let functionName;
+            let args = [params.y0, params.t0, params.h, params.n_steps];
+
+            switch (params.problem_type) {
+                case 'exponential_growth':
+                    functionName = 'solve_exponential_growth';
+                    break;
+                case 'exponential_decay':
+                    functionName = 'solve_exponential_decay';
+                    break;
+                case 'logistic_growth':
+                    functionName = 'solve_logistic_growth';
+                    args.push(params.r, params.K);
+                    break;
+                case 'harmonic_oscillator':
+                    functionName = 'solve_harmonic_oscillator';
+                    args.push(params.omega);
+                    break;
+                case 'population_predation':
+                    functionName = 'solve_population_predation';
+                    args.push(params.r_pred, params.a);
+                    break;
+                default:
+                    throw new Error('Unknown problem type');
+            }
+
+            const studentId = document.getElementById('student-id')?.value?.trim() || 'demo-user';
+            
+            const response = await fetch(`${API_BASE_URL}/call`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    student_id: studentId,
+                    func_name: functionName,
+                    args: args,
+                    experiment_name: 'euler',
+                    trial: 'euler-demo'
+                })
+            });
+
+            if (!response.ok) {
+                let errorMessage = 'Failed to solve problem';
+                try {
+                    const errorData = await response.json();
+                    if (errorData.detail) {
+                        errorMessage = typeof errorData.detail === 'string' ? errorData.detail : JSON.stringify(errorData.detail);
+                    } else if (errorData.error) {
+                        errorMessage = errorData.error;
+                    }
+                } catch (e) {
+                    errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                }
+                throw new Error(errorMessage);
+            }
+
+            const data = await response.json();
+            return data.result;
+        }
+
+        // Plot solution
+        function plotSolution(solution, label = 'Euler Solution') {
+            if (!solution || !Array.isArray(solution)) {
+                throw new Error('Invalid solution data');
+            }
+
+            const times = solution.map(point => point[0]);
+            const values = solution.map(point => point[1]);
+
+            const dataset = {
+                label: label,
+                data: times.map((t, i) => ({ x: t, y: values[i] })),
+                borderColor: `hsl(${Math.random() * 360}, 70%, 50%)`,
+                backgroundColor: `hsla(${Math.random() * 360}, 70%, 50%, 0.1)`,
+                fill: false,
+                tension: 0.1
+            };
+
+            solutionChart.data.datasets.push(dataset);
+            solutionChart.update();
+
+            // Update info
+            const finalTime = times[times.length - 1];
+            const finalValue = values[values.length - 1];
+            document.getElementById('solution-info').textContent = 
+                `Final time: ${finalTime.toFixed(3)}, Final value: ${finalValue.toFixed(6)}`;
+        }
+
+        // Compare step sizes
+        async function compareStepSizes(params) {
+            const stepSizes = [0.1, 0.05, 0.02, 0.01];
+            const datasets = [];
+
+            for (let i = 0; i < stepSizes.length; i++) {
+                const h = stepSizes[i];
+                const modifiedParams = { ...params, h };
+                
+                try {
+                    const solution = await solveProblem(modifiedParams);
+                    const times = solution.map(point => point[0]);
+                    const values = solution.map(point => point[1]);
+
+                    datasets.push({
+                        label: `h = ${h}`,
+                        data: times.map((t, i) => ({ x: t, y: values[i] })),
+                        borderColor: `hsl(${i * 90}, 70%, 50%)`,
+                        backgroundColor: `hsla(${i * 90}, 70%, 50%, 0.1)`,
+                        fill: false,
+                        tension: 0.1
+                    });
+                } catch (error) {
+                    console.error(`Failed to solve with h = ${h}:`, error);
+                }
+            }
+
+            comparisonChart.data.datasets = datasets;
+            comparisonChart.update();
+
+            document.getElementById('comparison-info').textContent = 
+                `Compared ${datasets.length} different step sizes`;
+        }
+
+        // Log current solution
+        async function logSolution() {
+            const studentId = document.getElementById('student-id').value.trim();
+            const trialName = document.getElementById('trial-name').value.trim();
+
+            if (!studentId) {
+                document.getElementById('log-status').textContent = 'Please enter a student ID';
+                document.getElementById('log-status').className = 'mt-12 text-sm text-error';
+                return;
+            }
+
+            if (!currentSolution) {
+                document.getElementById('log-status').textContent = 'No solution to log. Please solve a problem first.';
+                document.getElementById('log-status').className = 'mt-12 text-sm text-error';
+                return;
+            }
+
+            try {
+                const params = getParameters();
+                const response = await fetch(`${API_BASE_URL}/call`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        student_id: studentId,
+                        func_name: 'echo',
+                        args: [{
+                            kind: 'euler_demo',
+                            problem_type: params.problem_type,
+                            parameters: params,
+                            solution: currentSolution,
+                            timestamp: new Date().toISOString()
+                        }],
+                        experiment_name: 'euler',
+                        trial: trialName || 'euler-demo'
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to log solution');
+                }
+
+                document.getElementById('log-status').textContent = 'Solution logged successfully!';
+                document.getElementById('log-status').className = 'mt-12 text-sm text-success';
+            } catch (error) {
+                document.getElementById('log-status').textContent = `Error: ${error.message}`;
+                document.getElementById('log-status').className = 'mt-12 text-sm text-error';
+            }
+        }
+
+        // Event listeners
+        document.getElementById('problem-type').addEventListener('change', updateParameterVisibility);
+        document.getElementById('solve-btn').addEventListener('click', async () => {
+            try {
+                const params = getParameters();
+                const solution = await solveProblem(params);
+                currentSolution = solution;
+                plotSolution(solution);
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        });
+
+        document.getElementById('compare-btn').addEventListener('click', async () => {
+            try {
+                const params = getParameters();
+                await compareStepSizes(params);
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        });
+
+        document.getElementById('clear-btn').addEventListener('click', () => {
+            solutionChart.data.datasets = [];
+            solutionChart.update();
+            comparisonChart.data.datasets = [];
+            comparisonChart.update();
+            document.getElementById('solution-info').textContent = '';
+            document.getElementById('comparison-info').textContent = '';
+            currentSolution = null;
+        });
+
+        document.getElementById('log-btn').addEventListener('click', logSolution);
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            initCharts();
+            updateParameterVisibility();
+        });
+    </script>
+    <script src="scripts/theme.js"></script>
+</body>
+</html>

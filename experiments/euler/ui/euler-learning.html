@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Learn Euler's Method</title>
+    <link rel="stylesheet" href="style/main.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- CodeMirror for code editor -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/monokai.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/python/python.min.js"></script>
+    
+    <!-- KaTeX for mathematical notation -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Learn Euler's Method</h1>
+            <span class="subtle">Implement Euler's method step by step</span>
+            <a href="dashboard.html" class="btn" style="float:right;">← Back to Dashboard</a>
+        </header>
+
+        <div class="content-section">
+            <h2>Understanding Euler's Method</h2>
+            <p>Euler's method is a numerical technique for solving ordinary differential equations (ODEs). The key idea is:</p>
+            <div class="card">
+                <h3>The Euler Formula</h3>
+                <div style="text-align: center; margin: 20px 0;">
+                    <div style="font-size: 24px; font-weight: bold; color: var(--primary-color);">
+                        $$y_{n+1} = y_n + h \cdot f(t_n, y_n)$$
+                    </div>
+                </div>
+                <p>Where:</p>
+                <ul>
+                    <li>$y_n$ is the current value</li>
+                    <li>$h$ is the step size</li>
+                    <li>$f(t_n, y_n)$ is the derivative $\frac{dy}{dt}$ evaluated at the current point</li>
+                    <li>$y_{n+1}$ is the next value</li>
+                </ul>
+                <p style="margin-top: 15px; font-style: italic; color: var(--muted-color);">
+                    This formula approximates the solution by taking small steps along the tangent line at each point.
+                </p>
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>Step-by-Step Implementation</h2>
+            
+            <div class="card">
+                <h3>Step 1: Choose Your Problem</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="problem-type">Problem Type</label>
+                        <select id="problem-type" class="input">
+                            <option value="exponential_growth">Exponential Growth (dy/dt = y)</option>
+                            <option value="exponential_decay">Exponential Decay (dy/dt = -y)</option>
+                            <option value="logistic_growth">Logistic Growth (dy/dt = r*y*(1-y/K))</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="y0">Initial Value (y₀)</label>
+                        <input type="number" id="y0" class="input" value="1.0" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label for="h">Step Size (h)</label>
+                        <input type="number" id="h" class="input" value="0.1" step="0.01" min="0.001">
+                    </div>
+                    <div class="form-group">
+                        <label for="n-steps">Number of Steps</label>
+                        <input type="number" id="n-steps" class="input" value="5" min="1" max="20">
+                    </div>
+                </div>
+                
+                <!-- Additional parameters -->
+                <div id="additional-params" style="margin-top: 15px;">
+                    <div class="form-row" id="logistic-params" style="display: none;">
+                        <div class="form-group">
+                            <label for="r">Growth Rate (r)</label>
+                            <input type="number" id="r" class="input" value="1.0" step="0.1">
+                        </div>
+                        <div class="form-group">
+                            <label for="K">Carrying Capacity (K)</label>
+                            <input type="number" id="K" class="input" value="10.0" step="0.1">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Step 2: Implement Euler's Method</h3>
+                <p>Now it's your turn! Try to implement Euler's method. You can use the <code>euler_step()</code> function for each step, or implement the full algorithm yourself.</p>
+                
+                <div style="margin: 15px 0;">
+                    <button id="get-hint-btn" class="btn">Get Hint</button>
+                    <button id="show-solution-btn" class="btn">Show Reference Solution</button>
+                    <button id="test-implementation-btn" class="btn">Test My Implementation</button>
+                </div>
+                
+                <div id="hint-area" class="card" style="display: none; background: var(--surface-2);">
+                    <h4>💡 Hint</h4>
+                    <p id="hint-text"></p>
+                </div>
+                
+                <div id="solution-area" class="card" style="display: none; background: var(--surface-2);">
+                    <h4>📚 Reference Solution</h4>
+                    <pre id="solution-code"></pre>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Step 3: Implement Euler's Method</h3>
+                <p>Write your implementation in the code editor below. You can use mathematical notation like <code>y_{n+1}</code> in comments!</p>
+                
+                <div style="margin-bottom: 15px;">
+                    <button id="show-solution-btn" class="btn">Show Reference Solution</button>
+                    <button id="run-code-btn" class="btn">Run My Code</button>
+                    <button id="validate-btn" class="btn">Validate Solution</button>
+                </div>
+                
+                <div id="solution-area" class="card" style="display: none; background: var(--surface-2);">
+                    <h4>📚 Reference Solution</h4>
+                    <pre id="solution-code"></pre>
+                </div>
+                
+                <div style="margin-top: 15px;">
+                    <label for="code-editor">Your Implementation:</label>
+                    <textarea id="code-editor"></textarea>
+                </div>
+                
+                <div style="margin-top: 15px;">
+                    <button id="plot-solution-btn" class="btn">Plot My Solution</button>
+                </div>
+                
+                <div id="code-output" class="card" style="display: none; background: var(--surface-2); margin-top: 15px;">
+                    <h4>📊 Output</h4>
+                    <pre id="output-text"></pre>
+                </div>
+                
+                <div id="validation-result" class="mt-12" style="display: none;"></div>
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>Visualization</h2>
+            <div style="position: relative; height: 400px;">
+                <canvas id="solution-chart"></canvas>
+            </div>
+            <div id="plot-info" class="mt-12 text-sm text-muted"></div>
+        </div>
+
+        <div class="content-section">
+            <h2>Student Information</h2>
+            <p class="text-muted mb-12">Enter your student ID to track your progress and get personalized feedback.</p>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="student-id">Student ID</label>
+                    <input type="text" id="student-id" class="input" placeholder="Enter your student ID" value="demo-user">
+                </div>
+                <div class="form-group">
+                    <label for="trial-name">Trial Name</label>
+                    <input type="text" id="trial-name" class="input" placeholder="e.g., euler-learning-1">
+                </div>
+                <button id="log-btn" class="btn">Log My Progress</button>
+            </div>
+            <div id="log-status" class="mt-12 text-sm"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = window.location.origin;
+        
+        let solutionChart = null;
+        let currentSolution = null;
+        let codeEditor = null;
+
+        // Initialize chart
+        function initChart() {
+            const ctx = document.getElementById('solution-chart').getContext('2d');
+            solutionChart = new Chart(ctx, {
+                type: 'line',
+                data: { datasets: [] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { title: { display: true, text: 'Time (t)' } },
+                        y: { title: { display: true, text: 'y(t)' } }
+                    },
+                    plugins: {
+                        legend: { display: true },
+                        title: { display: true, text: 'Euler\'s Method Solution' }
+                    }
+                }
+            });
+        }
+
+        // Initialize code editor
+        function initCodeEditor() {
+            const textarea = document.getElementById('code-editor');
+            codeEditor = CodeMirror.fromTextArea(textarea, {
+                mode: 'python',
+                theme: 'monokai',
+                lineNumbers: true,
+                indentUnit: 4,
+                indentWithTabs: false,
+                lineWrapping: true,
+                matchBrackets: true,
+                autoCloseBrackets: true,
+                foldGutter: true,
+                gutters: ['CodeMirror-linenumbers', 'CodeMirror-foldgutter']
+            });
+            
+            // Set initial code template
+            const template = `# Euler's Method Implementation
+# The formula: y_{n+1} = y_n + h * f(t_n, y_n)
+
+def my_euler_method(f, y0, t0, h, n_steps):
+    """
+    Implement Euler's method to solve dy/dt = f(t, y)
+    
+    Args:
+        f: derivative function f(t, y) = dy/dt
+        y0: initial value
+        t0: initial time
+        h: step size
+        n_steps: number of steps
+    
+    Returns:
+        List of (t, y) pairs
+    """
+    # TODO: Implement Euler's method here
+    solution = [(t0, y0)]  # Start with initial condition
+    
+    # Your implementation goes here...
+    
+    return solution
+
+# Test your implementation
+# Uncomment and modify these lines to test:
+# result = my_euler_method(exponential_growth, 1.0, 0.0, 0.1, 5)
+# print("Solution:", result)`;
+            
+            codeEditor.setValue(template);
+        }
+
+        // Render mathematical notation
+        function renderMath(element) {
+            if (typeof renderMathInElement !== 'undefined') {
+                renderMathInElement(element, {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        {left: '$', right: '$', display: false},
+                        {left: '\\(', right: '\\)', display: false},
+                        {left: '\\[', right: '\\]', display: true}
+                    ]
+                });
+            }
+        }
+
+        // Show/hide additional parameters
+        function updateParameterVisibility() {
+            const problemType = document.getElementById('problem-type').value;
+            document.getElementById('logistic-params').style.display = problemType === 'logistic_growth' ? 'flex' : 'none';
+        }
+
+
+        // Show reference solution
+        function showReferenceSolution() {
+            const problemType = document.getElementById('problem-type').value;
+            const y0 = parseFloat(document.getElementById('y0').value);
+            const h = parseFloat(document.getElementById('h').value);
+            const nSteps = parseInt(document.getElementById('n-steps').value);
+            
+            let code = `def my_euler_method(f, y0, t0, h, n_steps):
+    solution = [(t0, y0)]
+    t, y = t0, y0
+    
+    for i in range(n_steps):
+        # Calculate the derivative at current point
+        dy_dt = f(t, y)
+        
+        # Apply Euler's formula
+        y_new = y + h * dy_dt
+        t_new = t + h
+        
+        # Add to solution
+        solution.append((t_new, y_new))
+        
+        # Update for next iteration
+        t, y = t_new, y_new
+    
+    return solution
+
+# Example usage:
+solution = my_euler_method(${problemType}, ${y0}, 0.0, ${h}, ${nSteps})`;
+
+            document.getElementById('solution-code').textContent = code;
+            document.getElementById('solution-area').style.display = 'block';
+        }
+
+        // Run student code
+        async function runCode() {
+            if (!codeEditor) {
+                alert('Code editor not initialized!');
+                return;
+            }
+            
+            const code = codeEditor.getValue();
+            const studentId = document.getElementById('student-id')?.value?.trim() || 'demo-user';
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/call`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        student_id: studentId,
+                        func_name: 'echo',
+                        args: [{
+                            kind: 'code_execution',
+                            code: code,
+                            timestamp: new Date().toISOString()
+                        }],
+                        experiment_name: 'euler',
+                        trial: 'euler-learning'
+                    })
+                });
+
+                if (!response.ok) throw new Error('Failed to execute code');
+                
+                const data = await response.json();
+                
+                // Display output
+                document.getElementById('output-text').textContent = 'Code executed successfully! Check the logs for output.';
+                document.getElementById('code-output').style.display = 'block';
+                
+                // Try to extract solution from the code if it exists
+                try {
+                    // This is a simplified approach - in a real implementation,
+                    // you'd want to actually execute the Python code
+                    const solutionMatch = code.match(/solution\s*=\s*\[(.*?)\]/s);
+                    if (solutionMatch) {
+                        // Try to parse the solution
+                        const solutionText = '[' + solutionMatch[1] + ']';
+                        const solution = JSON.parse(solutionText);
+                        currentSolution = solution;
+                        document.getElementById('output-text').textContent += '\n\nSolution found: ' + JSON.stringify(solution);
+                    }
+                } catch (e) {
+                    // Solution parsing failed, that's okay
+                }
+                
+            } catch (error) {
+                document.getElementById('output-text').textContent = `Error: ${error.message}`;
+                document.getElementById('code-output').style.display = 'block';
+            }
+        }
+
+        // Test implementation
+        async function testImplementation() {
+            if (!codeEditor) {
+                alert('Code editor not initialized!');
+                return;
+            }
+            
+            const code = codeEditor.getValue();
+            
+            // Try to extract solution from the code
+            let studentSolution = null;
+            try {
+                // Look for a solution variable in the code
+                const solutionMatch = code.match(/solution\s*=\s*\[(.*?)\]/s);
+                if (solutionMatch) {
+                    const solutionText = '[' + solutionMatch[1] + ']';
+                    studentSolution = JSON.parse(solutionText);
+                } else {
+                    alert('Please implement your solution and assign it to a variable called "solution"!');
+                    return;
+                }
+            } catch (e) {
+                alert('Could not parse solution from your code. Make sure you have a "solution" variable with the correct format.');
+                return;
+            }
+            
+            try {
+                const params = getParameters();
+                const solutionData = {
+                    derivative_function: params.problem_type,
+                    y0: params.y0,
+                    t0: 0.0,
+                    h: params.h,
+                    n_steps: params.n_steps,
+                    student_solution: studentSolution
+                };
+                
+                // Add problem-specific parameters
+                if (params.problem_type === 'logistic_growth') {
+                    solutionData.r = params.r;
+                    solutionData.K = params.K;
+                }
+                
+                const studentId = document.getElementById('student-id')?.value?.trim() || 'demo-user';
+                
+                const response = await fetch(`${API_BASE_URL}/call`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        student_id: studentId,
+                        func_name: 'student_euler_solution',
+                        args: [solutionData],
+                        experiment_name: 'euler',
+                        trial: 'euler-learning'
+                    })
+                });
+
+                if (!response.ok) throw new Error('Failed to validate solution');
+                
+                const data = await response.json();
+                const result = data.result;
+                
+                displayValidationResult(result);
+                
+                if (result.valid) {
+                    currentSolution = studentSolution;
+                }
+                
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        }
+
+        // Display validation result
+        function displayValidationResult(result) {
+            const resultDiv = document.getElementById('validation-result');
+            
+            if (result.valid) {
+                resultDiv.innerHTML = `
+                    <div class="notification-message success">
+                        ✅ ${result.message}
+                    </div>
+                `;
+            } else {
+                resultDiv.innerHTML = `
+                    <div class="notification-message error">
+                        ❌ ${result.error}
+                    </div>
+                `;
+            }
+            
+            resultDiv.style.display = 'block';
+        }
+
+        // Plot solution
+        function plotSolution(solution, label = 'Student Solution', color = null) {
+            if (!solution || !Array.isArray(solution)) {
+                alert('Invalid solution data');
+                return;
+            }
+
+            const times = solution.map(point => point[0]);
+            const values = solution.map(point => point[1]);
+
+            const dataset = {
+                label: label,
+                data: times.map((t, i) => ({ x: t, y: values[i] })),
+                borderColor: color || `hsl(${Math.random() * 360}, 70%, 50%)`,
+                backgroundColor: color ? color.replace('rgb', 'rgba').replace(')', ', 0.1)') : `hsla(${Math.random() * 360}, 70%, 50%, 0.1)`,
+                fill: false,
+                tension: 0.1
+            };
+
+            solutionChart.data.datasets.push(dataset);
+            solutionChart.update();
+
+            document.getElementById('plot-info').textContent = 
+                `Plotted ${solution.length} points from ${times[0].toFixed(3)} to ${times[times.length-1].toFixed(3)}`;
+        }
+
+        // Get parameters from form
+        function getParameters() {
+            const params = {
+                problem_type: document.getElementById('problem-type').value,
+                y0: parseFloat(document.getElementById('y0').value),
+                h: parseFloat(document.getElementById('h').value),
+                n_steps: parseInt(document.getElementById('n-steps').value)
+            };
+
+            if (params.problem_type === 'logistic_growth') {
+                params.r = parseFloat(document.getElementById('r').value);
+                params.K = parseFloat(document.getElementById('K').value);
+            }
+
+            return params;
+        }
+
+        // Log progress
+        async function logProgress() {
+            const studentId = document.getElementById('student-id').value.trim();
+            const trialName = document.getElementById('trial-name').value.trim();
+
+            if (!studentId) {
+                document.getElementById('log-status').textContent = 'Please enter a student ID';
+                document.getElementById('log-status').className = 'mt-12 text-sm text-error';
+                return;
+            }
+
+            try {
+                const params = getParameters();
+                const studentSolutionText = document.getElementById('student-solution').value.trim();
+                
+                const logData = {
+                    kind: 'euler_learning',
+                    problem_type: params.problem_type,
+                    parameters: params,
+                    student_solution: studentSolutionText ? JSON.parse(studentSolutionText) : null,
+                    timestamp: new Date().toISOString()
+                };
+
+                const response = await fetch(`${API_BASE_URL}/call`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        student_id: studentId,
+                        func_name: 'echo',
+                        args: [logData],
+                        experiment_name: 'euler',
+                        trial: trialName || 'euler-learning'
+                    })
+                });
+
+                if (!response.ok) throw new Error('Failed to log progress');
+
+                document.getElementById('log-status').textContent = 'Progress logged successfully!';
+                document.getElementById('log-status').className = 'mt-12 text-sm text-success';
+            } catch (error) {
+                document.getElementById('log-status').textContent = `Error: ${error.message}`;
+                document.getElementById('log-status').className = 'mt-12 text-sm text-error';
+            }
+        }
+
+        // Event listeners
+        document.getElementById('problem-type').addEventListener('change', updateParameterVisibility);
+        document.getElementById('show-solution-btn').addEventListener('click', showReferenceSolution);
+        document.getElementById('run-code-btn').addEventListener('click', runCode);
+        document.getElementById('validate-btn').addEventListener('click', testImplementation);
+        document.getElementById('plot-solution-btn').addEventListener('click', () => {
+            if (currentSolution) {
+                plotSolution(currentSolution);
+            } else {
+                alert('Please run and validate your code first!');
+            }
+        });
+        document.getElementById('log-btn').addEventListener('click', logProgress);
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            initChart();
+            initCodeEditor();
+            updateParameterVisibility();
+            
+            // Render math in the page
+            renderMath(document.body);
+        });
+    </script>
+    <script src="scripts/theme.js"></script>
+</body>
+</html>

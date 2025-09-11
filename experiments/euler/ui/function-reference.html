@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Euler's Method - Function Reference</title>
+    <link rel="stylesheet" href="style/main.css" />
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Euler's Method - Function Reference</h1>
+            <span class="subtle">Complete API documentation for all available functions</span>
+            <a href="dashboard.html" class="btn" style="float:right;">← Back to Dashboard</a>
+        </header>
+
+        <div class="content-section">
+            <h2>Core Euler Method Functions</h2>
+            <div class="card">
+                <h3>euler_step(f, t, y, h)</h3>
+                <p><strong>Description:</strong> Perform one step of Euler's method. This is the core formula: <strong>y_{n+1} = y_n + h × f(t_n, y_n)</strong></p>
+                <p><strong>Parameters:</strong></p>
+                <ul>
+                    <li><code>f</code> (Callable): The derivative function f(t, y) = dy/dt</li>
+                    <li><code>t</code> (float): Current time</li>
+                    <li><code>y</code> (float): Current value</li>
+                    <li><code>h</code> (float): Step size</li>
+                </ul>
+                <p><strong>Returns:</strong> Tuple of (next_time, next_value)</p>
+                <p><strong>Example:</strong></p>
+                <pre><code># Perform one Euler step
+next_t, next_y = euler_step(exponential_growth, 0.0, 1.0, 0.1)
+# next_t = 0.1, next_y = 1.1</code></pre>
+            </div>
+            
+            <div class="card">
+                <h3>euler_method(f, y0, t0, h, n_steps)</h3>
+                <p><strong>Description:</strong> Complete Euler's method implementation (for reference). Students should try to implement their own version!</p>
+                <p><strong>Parameters:</strong></p>
+                <ul>
+                    <li><code>f</code> (Callable): The derivative function f(t, y) = dy/dt</li>
+                    <li><code>y0</code> (float): Initial value y(t0)</li>
+                    <li><code>t0</code> (float): Initial time</li>
+                    <li><code>h</code> (float): Step size</li>
+                    <li><code>n_steps</code> (int): Number of steps to take</li>
+                </ul>
+                <p><strong>Returns:</strong> List of (t, y) pairs representing the solution</p>
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>Derivative Functions</h2>
+            
+            <div class="card">
+                <h3>exponential_growth(t, y)</h3>
+                <p><strong>Description:</strong> Exponential growth: dy/dt = y</p>
+                <p><strong>Parameters:</strong></p>
+                <ul>
+                    <li><code>t</code> (float): Time</li>
+                    <li><code>y</code> (float): Current value</li>
+                </ul>
+                <p><strong>Returns:</strong> float - The derivative dy/dt</p>
+            </div>
+
+            <div class="card">
+                <h3>exponential_decay(t, y)</h3>
+                <p><strong>Description:</strong> Exponential decay: dy/dt = -y</p>
+                <p><strong>Parameters:</strong></p>
+                <ul>
+                    <li><code>t</code> (float): Time</li>
+                    <li><code>y</code> (float): Current value</li>
+                </ul>
+                <p><strong>Returns:</strong> float - The derivative dy/dt</p>
+            </div>
+
+            <div class="card">
+                <h3>logistic_growth(t, y, r=1.0, K=10.0)</h3>
+                <p><strong>Description:</strong> Logistic growth: dy/dt = r*y*(1 - y/K)</p>
+                <p><strong>Parameters:</strong></p>
+                <ul>
+                    <li><code>t</code> (float): Time</li>
+                    <li><code>y</code> (float): Current value</li>
+                    <li><code>r</code> (float): Growth rate (default: 1.0)</li>
+                    <li><code>K</code> (float): Carrying capacity (default: 10.0)</li>
+                </ul>
+                <p><strong>Returns:</strong> float - The derivative dy/dt</p>
+            </div>
+
+            <div class="card">
+                <h3>harmonic_oscillator(t, y, omega=1.0)</h3>
+                <p><strong>Description:</strong> Simple harmonic oscillator: dy/dt = -ω² * y</p>
+                <p><strong>Parameters:</strong></p>
+                <ul>
+                    <li><code>t</code> (float): Time</li>
+                    <li><code>y</code> (float): Current value</li>
+                    <li><code>omega</code> (float): Angular frequency (default: 1.0)</li>
+                </ul>
+                <p><strong>Returns:</strong> float - The derivative dy/dt</p>
+            </div>
+
+            <div class="card">
+                <h3>population_with_predation(t, y, r=0.5, a=0.1)</h3>
+                <p><strong>Description:</strong> Population with predation: dy/dt = r*y - a*y²</p>
+                <p><strong>Parameters:</strong></p>
+                <ul>
+                    <li><code>t</code> (float): Time</li>
+                    <li><code>y</code> (float): Current value</li>
+                    <li><code>r</code> (float): Growth rate (default: 0.5)</li>
+                    <li><code>a</code> (float): Predation coefficient (default: 0.1)</li>
+                </ul>
+                <p><strong>Returns:</strong> float - The derivative dy/dt</p>
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>Pre-configured Solver Functions</h2>
+            
+            <div class="card">
+                <h3>solve_exponential_growth(y0=1.0, t0=0.0, h=0.1, n_steps=10)</h3>
+                <p><strong>Description:</strong> Solve dy/dt = y using Euler's method.</p>
+                <p><strong>Parameters:</strong></p>
+                <ul>
+                    <li><code>y0</code> (float): Initial value (default: 1.0)</li>
+                    <li><code>t0</code> (float): Initial time (default: 0.0)</li>
+                    <li><code>h</code> (float): Step size (default: 0.1)</li>
+                    <li><code>n_steps</code> (int): Number of steps (default: 10)</li>
+                </ul>
+                <p><strong>Returns:</strong> List of (t, y) pairs</p>
+                <p><strong>Example:</strong></p>
+                <pre><code># Solve exponential growth
+solution = solve_exponential_growth(y0=2.0, h=0.05, n_steps=20)</code></pre>
+            </div>
+
+            <div class="card">
+                <h3>solve_exponential_decay(y0=1.0, t0=0.0, h=0.1, n_steps=10)</h3>
+                <p><strong>Description:</strong> Solve dy/dt = -y using Euler's method.</p>
+                <p><strong>Parameters:</strong></p>
+                <ul>
+                    <li><code>y0</code> (float): Initial value (default: 1.0)</li>
+                    <li><code>t0</code> (float): Initial time (default: 0.0)</li>
+                    <li><code>h</code> (float): Step size (default: 0.1)</li>
+                    <li><code>n_steps</code> (int): Number of steps (default: 10)</li>
+                </ul>
+                <p><strong>Returns:</strong> List of (t, y) pairs</p>
+            </div>
+
+            <div class="card">
+                <h3>solve_logistic_growth(y0=1.0, t0=0.0, h=0.1, n_steps=50, r=1.0, K=10.0)</h3>
+                <p><strong>Description:</strong> Solve logistic growth dy/dt = r*y*(1 - y/K) using Euler's method.</p>
+                <p><strong>Parameters:</strong></p>
+                <ul>
+                    <li><code>y0</code> (float): Initial value (default: 1.0)</li>
+                    <li><code>t0</code> (float): Initial time (default: 0.0)</li>
+                    <li><code>h</code> (float): Step size (default: 0.1)</li>
+                    <li><code>n_steps</code> (int): Number of steps (default: 50)</li>
+                    <li><code>r</code> (float): Growth rate (default: 1.0)</li>
+                    <li><code>K</code> (float): Carrying capacity (default: 10.0)</li>
+                </ul>
+                <p><strong>Returns:</strong> List of (t, y) pairs</p>
+                <p><strong>Example:</strong></p>
+                <pre><code># Solve logistic growth with custom parameters
+solution = solve_logistic_growth(y0=2.0, h=0.05, n_steps=100, r=0.8, K=15.0)</code></pre>
+            </div>
+
+            <div class="card">
+                <h3>solve_harmonic_oscillator(y0=1.0, t0=0.0, h=0.1, n_steps=50, omega=1.0)</h3>
+                <p><strong>Description:</strong> Solve harmonic oscillator dy/dt = -ω² * y using Euler's method.</p>
+                <p><strong>Parameters:</strong></p>
+                <ul>
+                    <li><code>y0</code> (float): Initial value (default: 1.0)</li>
+                    <li><code>t0</code> (float): Initial time (default: 0.0)</li>
+                    <li><code>h</code> (float): Step size (default: 0.1)</li>
+                    <li><code>n_steps</code> (int): Number of steps (default: 50)</li>
+                    <li><code>omega</code> (float): Angular frequency (default: 1.0)</li>
+                </ul>
+                <p><strong>Returns:</strong> List of (t, y) pairs</p>
+            </div>
+
+            <div class="card">
+                <h3>solve_population_predation(y0=5.0, t0=0.0, h=0.1, n_steps=50, r=0.5, a=0.1)</h3>
+                <p><strong>Description:</strong> Solve population with predation dy/dt = r*y - a*y² using Euler's method.</p>
+                <p><strong>Parameters:</strong></p>
+                <ul>
+                    <li><code>y0</code> (float): Initial value (default: 5.0)</li>
+                    <li><code>t0</code> (float): Initial time (default: 0.0)</li>
+                    <li><code>h</code> (float): Step size (default: 0.1)</li>
+                    <li><code>n_steps</code> (int): Number of steps (default: 50)</li>
+                    <li><code>r</code> (float): Growth rate (default: 0.5)</li>
+                    <li><code>a</code> (float): Predation coefficient (default: 0.1)</li>
+                </ul>
+                <p><strong>Returns:</strong> List of (t, y) pairs</p>
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>Analysis Functions</h2>
+            
+            <div class="card">
+                <h3>compare_step_sizes(f, y0, t0, t_end, step_sizes)</h3>
+                <p><strong>Description:</strong> Compare Euler's method with different step sizes.</p>
+                <p><strong>Parameters:</strong></p>
+                <ul>
+                    <li><code>f</code> (Callable): The derivative function f(t, y) = dy/dt</li>
+                    <li><code>y0</code> (float): Initial value</li>
+                    <li><code>t0</code> (float): Initial time</li>
+                    <li><code>t_end</code> (float): Final time</li>
+                    <li><code>step_sizes</code> (List[float]): List of step sizes to compare</li>
+                </ul>
+                <p><strong>Returns:</strong> Dictionary with step sizes as keys and solution lists as values</p>
+                <p><strong>Example:</strong></p>
+                <pre><code># Compare different step sizes
+results = compare_step_sizes(exponential_growth, 1.0, 0.0, 2.0, [0.1, 0.05, 0.01])</code></pre>
+            </div>
+
+            <div class="card">
+                <h3>calculate_error(true_solution, euler_solution)</h3>
+                <p><strong>Description:</strong> Calculate the error between true solution and Euler's method.</p>
+                <p><strong>Parameters:</strong></p>
+                <ul>
+                    <li><code>true_solution</code> (Callable): Function that gives the true solution y(t)</li>
+                    <li><code>euler_solution</code> (List): List of (t, y) pairs from Euler's method</li>
+                </ul>
+                <p><strong>Returns:</strong> List of absolute errors at each time point</p>
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>True Solution Functions</h2>
+            
+            <div class="card">
+                <h3>exponential_true_solution(t, y0=1.0)</h3>
+                <p><strong>Description:</strong> True solution for dy/dt = y: y(t) = y0 * e^t</p>
+                <p><strong>Parameters:</strong></p>
+                <ul>
+                    <li><code>t</code> (float): Time</li>
+                    <li><code>y0</code> (float): Initial value (default: 1.0)</li>
+                </ul>
+                <p><strong>Returns:</strong> float - The true solution value</p>
+            </div>
+
+            <div class="card">
+                <h3>exponential_decay_true_solution(t, y0=1.0)</h3>
+                <p><strong>Description:</strong> True solution for dy/dt = -y: y(t) = y0 * e^(-t)</p>
+                <p><strong>Parameters:</strong></p>
+                <ul>
+                    <li><code>t</code> (float): Time</li>
+                    <li><code>y0</code> (float): Initial value (default: 1.0)</li>
+                </ul>
+                <p><strong>Returns:</strong> float - The true solution value</p>
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>Educational Functions</h2>
+            
+            <div class="card">
+                <h3>student_euler_solution(solution_data)</h3>
+                <p><strong>Description:</strong> Validate a student's Euler method implementation and provide feedback.</p>
+                <p><strong>Parameters:</strong></p>
+                <ul>
+                    <li><code>solution_data</code> (dict): Dictionary containing:
+                        <ul>
+                            <li><code>derivative_function</code>: The derivative function name</li>
+                            <li><code>y0</code>: Initial value</li>
+                            <li><code>t0</code>: Initial time</li>
+                            <li><code>h</code>: Step size</li>
+                            <li><code>n_steps</code>: Number of steps</li>
+                            <li><code>student_solution</code>: List of (t, y) pairs from student's implementation</li>
+                        </ul>
+                    </li>
+                </ul>
+                <p><strong>Returns:</strong> Dictionary with validation results and feedback</p>
+            </div>
+            
+            <div class="card">
+                <h3>get_euler_hint(step_number)</h3>
+                <p><strong>Description:</strong> Provide hints for implementing Euler's method step by step.</p>
+                <p><strong>Parameters:</strong></p>
+                <ul>
+                    <li><code>step_number</code> (int): Which step the student is working on (0-based)</li>
+                </ul>
+                <p><strong>Returns:</strong> Hint string for that step</p>
+            </div>
+            
+            <div class="card">
+                <h3>check_euler_formula(t, y, h, f_value, next_y)</h3>
+                <p><strong>Description:</strong> Check if a student's Euler formula implementation is correct.</p>
+                <p><strong>Parameters:</strong></p>
+                <ul>
+                    <li><code>t</code> (float): Current time</li>
+                    <li><code>y</code> (float): Current value</li>
+                    <li><code>h</code> (float): Step size</li>
+                    <li><code>f_value</code> (float): Value of f(t, y)</li>
+                    <li><code>next_y</code> (float): Student's calculated next y value</li>
+                </ul>
+                <p><strong>Returns:</strong> Dictionary with feedback on correctness</p>
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>Utility Functions</h2>
+            
+            <div class="card">
+                <h3>echo(value)</h3>
+                <p><strong>Description:</strong> Return the input value unchanged. Useful for logging arbitrary payloads via /call.</p>
+                <p><strong>Parameters:</strong></p>
+                <ul>
+                    <li><code>value</code>: Any value to echo back</li>
+                </ul>
+                <p><strong>Returns:</strong> The input value unchanged</p>
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>Usage Examples</h2>
+            
+            <div class="card">
+                <h3>Basic Usage</h3>
+                <pre><code># Solve exponential growth
+solution = solve_exponential_growth(y0=1.0, h=0.1, n_steps=20)
+
+# Solve logistic growth with custom parameters
+solution = solve_logistic_growth(y0=2.0, h=0.05, n_steps=100, r=0.8, K=15.0)
+
+# Compare step sizes
+step_sizes = [0.1, 0.05, 0.01]
+results = compare_step_sizes(exponential_growth, 1.0, 0.0, 2.0, step_sizes)</code></pre>
+            </div>
+
+            <div class="card">
+                <h3>Error Analysis</h3>
+                <pre><code># Solve with Euler's method
+euler_solution = solve_exponential_growth(y0=1.0, h=0.1, n_steps=20)
+
+# Calculate error against true solution
+errors = calculate_error(exponential_true_solution, euler_solution)</code></pre>
+            </div>
+        </div>
+    </div>
+
+    <script src="scripts/theme.js"></script>
+</body>
+</html>
