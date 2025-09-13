@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Marimo Log Visualization</title>
+    <link rel="stylesheet" href="style/main.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@marimo-team/marimo-snippets@1"></script>
+    <style>
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        .back-btn {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .back-btn:hover {
+            background: #545b62;
+        }
+        .notebook-section {
+            margin-bottom: 40px;
+        }
+        .notebook-title {
+            color: #e0e0e0;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+    </style>
+</head>
+<body class="page-centered">
+    <div class="container">
+        <div class="header">
+            <h1 style="margin:0; color: #e0e0e0;">Marimo Log Visualization</h1>
+            <a href="dashboard.html" class="back-btn">Back to Dashboard</a>
+        </div>
+
+        <div class="notebook-section">
+            <h2 class="notebook-title">Test Notebook - Simple Scatter Plot</h2>
+            <marimo-iframe data-theme="dark" data-height="600px">
+                <pre><code class="language-python">import marimo as mo
+import requests as req
+import seaborn as sns
+import matplotlib.pyplot as plt</code></pre>
+                
+                <pre><code class="language-python"># Fetch logs from your server
+logs = req.get("http://localhost:9000/logs?sid=s001&exp=eigen").json()["logs"]
+print(f"Fetched {len(logs)} logs")</code></pre>
+                
+                <pre><code class="language-python"># Transform logs to extract x,y coordinates
+def transform(logs):
+    x, y = [], []
+    for log in logs:
+        if log.get("result_json"):
+            try:
+                result = log["result_json"]
+                if isinstance(result, str):
+                    import json
+                    result = json.loads(result)
+                if isinstance(result, list) and len(result) >= 2:
+                    x.append(result[0])
+                    y.append(result[1])
+            except:
+                continue
+    return x, y
+
+x, y = transform(logs)
+print(f"Extracted {len(x)} data points")</code></pre>
+                
+                <pre><code class="language-python"># Create scatter plot
+if len(x) > 0:
+    plt.figure(figsize=(10, 6))
+    plt.style.use('dark_background')
+    sns.scatterplot(x=x, y=y, alpha=0.7)
+    plt.title('Log Data Scatter Plot', color='white')
+    plt.xlabel('X Coordinate', color='white')
+    plt.ylabel('Y Coordinate', color='white')
+    plt.grid(True, alpha=0.3)
+    plt.show()
+else:
+    print("No data points to plot")</code></pre>
+            </marimo-iframe>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = window.location.origin;
+
+        // Require authentication to view dashboard
+        (async () => {
+            try {
+                const resp = await fetch(`${API_BASE_URL}/admin/ping`, { credentials: 'include' });
+                if (!resp.ok) {
+                    window.location.href = 'login.html';
+                }
+            } catch (e) {
+                window.location.href = 'login.html';
+            }
+        })();
+    </script>
+</body>
+</html>
