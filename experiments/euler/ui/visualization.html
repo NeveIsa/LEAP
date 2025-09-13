@@ -43,54 +43,128 @@
 <body class="page-centered">
     <div class="container">
         <div class="header">
-            <h1 style="margin:0; color: #e0e0e0;">Marimo Log Visualization</h1>
+            <h1 style="margin:0; color: #e0e0e0;">Euler's Method</h1>
             <a href="dashboard.html" class="back-btn">Back to Dashboard</a>
         </div>
 
         <div class="notebook-section">
-            <h2 class="notebook-title">Test Notebook - Simple Scatter Plot</h2>
+            <h2 class="notebook-title">Instructor Visualization</h2>
             <marimo-iframe data-theme="dark" data-height="600px">
-                <pre><code class="language-python">import marimo as mo
-import requests as req
-import seaborn as sns
-import matplotlib.pyplot as plt</code></pre>
-                
-                <pre><code class="language-python"># Fetch logs from your server
-logs = req.get("http://localhost:9000/logs?sid=s001&exp=eigen").json()["logs"]
-print(f"Fetched {len(logs)} logs")</code></pre>
-                
-                <pre><code class="language-python"># Transform logs to extract x,y coordinates
-def transform(logs):
-    x, y = [], []
-    for log in logs:
-        if log.get("result_json"):
-            try:
-                result = log["result_json"]
-                if isinstance(result, str):
-                    import json
-                    result = json.loads(result)
-                if isinstance(result, list) and len(result) >= 2:
-                    x.append(result[0])
-                    y.append(result[1])
-            except:
-                continue
-    return x, y
+                <pre><code class="language-python"><pre><code class="language-python">#Instructor Instructions
+mo.md("""
+## Visualization Instructions
 
-x, y = transform(logs)
-print(f"Extracted {len(x)} data points")</code></pre>
+### Step 1: Enter Student Information
+In the cell below, enter the student ID and trial information you want to analyze.
+
+### Step 2: Fetch Logs
+Run the "Fetch Logs" cell to retrieve the student's data from the server.
+
+### Step 3: Modify Analytical Solution
+In the plotting cell, update the analytical solution formula to match your differential equation:
+- Current: `y = e^(-2x)(x⁴/4 + 1)` 
+- Replace with your equation's analytical solution
+
+### Step 4: Run Plotting Cell
+Execute the plotting cell to compare student results vs analytical solution.
+
+---
+""")</code></pre></code></pre>
+               
+                <pre><code class="language-python">#Enter log fetch parameters
+student_id_input = mo.ui.text(
+    value="",
+    placeholder="Enter student ID",
+    label="Student ID (sid):"
+)
+
+trial_input = mo.ui.text(
+    value="",
+    placeholder="Enter trial name", 
+    label="Trial:"
+)
+
+count_input = mo.ui.number(
+    value=10,
+    start=1,
+    stop=10000,
+    step=1,
+    label="Number of logs (n):"
+)
+
+order_input = mo.ui.dropdown(
+    options=["latest", "earliest"],
+    value="latest",
+    label="Order:"
+)
+
+mo.vstack([
+    mo.md("**Log Fetch Parameters:**"),
+    student_id_input,
+    trial_input,
+    mo.hstack([count_input, order_input])
+])</code></pre>
+
+<pre><code class="language-python"># Fetch logs from your server
+params = {
+    "sid": student_id_input.value,
+    "trial": trial_input.value,
+    "n": count_input.value,
+    "order": order_input.value
+}
+logs = req.get("http://localhost:9000/logs", params=params).json()["logs"]
+print(f"Fetched {len(logs)} logs")
+                </code></pre>
                 
-                <pre><code class="language-python"># Create scatter plot
-if len(x) > 0:
-    plt.figure(figsize=(10, 6))
-    plt.style.use('dark_background')
-    sns.scatterplot(x=x, y=y, alpha=0.7)
-    plt.title('Log Data Scatter Plot', color='white')
-    plt.xlabel('X Coordinate', color='white')
-    plt.ylabel('Y Coordinate', color='white')
+                <pre><code class="language-python"># Extract data points from logs
+log_xs = []
+log_ys = []
+
+for log in logs:
+    try:
+        args = log.get('args_json', [])
+        if isinstance(args, str):
+            args = json.loads(args)
+        if isinstance(args, list) and len(args) == 1 and isinstance(args[0], list) and len(args[0]) == 2:
+            x, y = args[0]
+            log_xs.append(x)
+            log_ys.append(y)
+    except:
+        continue
+
+mo.md("**Note for Teacher:** Add the analytical solution formula in the code below to compare with student results.")
+
+if log_xs and log_ys:
+    plt.figure(figsize=(12, 8))
+    
+    # Plot student's Euler method results
+    plt.scatter(log_xs, log_ys, alpha=0.7, s=15, color='blue', label='Student Results')
+    
+    # Plot analytical solution: y = e^(-2x)(x⁴/4 + 1)
+    x_range = np.linspace(min(log_xs), max(log_xs), 1000)
+    y_actual = np.exp(-2 * x_range) * (x_range**4 / 4 + 1)
+    
+    plt.plot(x_range, y_actual, alpha=0.8, color='red', linewidth=2, label='Analytical Solution')
+    
+    plt.xlabel('x')
+    plt.ylabel('y')
+    plt.title('Student Euler Method vs Analytical Solution')
+    plt.legend()
     plt.grid(True, alpha=0.3)
     plt.show()
+    
+    print(f"Plotted {len(log_xs)} data points")
 else:
-    print("No data points to plot")</code></pre>
+    print("No valid data points found in logs to plot")
+
+                    </code></pre>
+
+                <pre><code class="language-python">import marimo as mo
+import requests as req
+import numpy as np
+import json
+import matplotlib.pyplot as plt</code></pre>
+
             </marimo-iframe>
         </div>
     </div>

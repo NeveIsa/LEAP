@@ -148,8 +148,8 @@
         const student = log.student_id || 'N/A';
         const trial = log.trial || log.experiment || 'N/A';
         const func = log.func_name || 'N/A';
-        const args = formatValue(log.args);
-        const result = formatValue(log.result);
+        const args = formatValue(log.args_json);
+        const result = formatValue(log.result_json);
         const error = log.error || '';
         row.innerHTML = `
           <td class="min">${time}</td>
