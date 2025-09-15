@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Marimo Log Visualization</title>
+    <link rel="stylesheet" href="style/main.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@marimo-team/marimo-snippets@1"></script>
+    <style>
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        .back-btn {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .back-btn:hover {
+            background: #545b62;
+        }
+        .notebook-section {
+            margin-bottom: 40px;
+        }
+        .notebook-title {
+            color: #e0e0e0;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+    </style>
+</head>
+<body class="page-centered">
+    <div class="container">
+        <div class="header">
+            <h1 style="margin:0; color: #e0e0e0;">Root Finding</h1>
+            <a href="dashboard.html" class="back-btn">Back to Dashboard</a>
+        </div>
+
+        <div class="notebook-section">
+            <h2 class="notebook-title">Instructor Visualization</h2>
+            <marimo-iframe data-theme="dark" data-height="600px">
+                <pre><code class="language-python"><pre><code class="language-python">#Instructor Instructions
+mo.md("""
+## Visualization Instructions
+
+### Step 1: Enter Student Information
+In the cell below, enter the student ID and trial information you want to analyze. Click off the cell to update the information.
+
+### Step 2: Fetch Logs
+Run the "Fetch Logs" cell to retrieve the student's data from the server.
+
+### Step 3: Modify Function
+In the plotting cell, update the formula to match your function:
+- Current: `y = (x-10)*(x-30)` 
+- Replace with your equation's analytical solution
+
+### Step 4: Run Plotting Cell
+Execute the plotting cell to compare student results vs analytical solution.
+
+---
+""")</code></pre></code></pre>
+               
+                <pre><code class="language-python">#Enter log fetch parameters
+student_id_input = mo.ui.text(
+    value="",
+    placeholder="Enter student ID",
+    label="Student ID (sid):"
+)
+
+trial_input = mo.ui.dropdown(
+    options=["Bisection", "Newton Raphson", "Secant"], 
+    label="Choose Root Finding Method"
+)
+
+count_input = mo.ui.number(
+    value=10,
+    start=1,
+    stop=10000,
+    step=1,
+    label="Number of logs (n):"
+)
+
+order_input = mo.ui.dropdown(
+    options=["latest", "earliest"],
+    value="latest",
+    label="Order:"
+)
+
+mo.vstack([
+    mo.md("**Log Fetch Parameters:**"),
+    trial_input,
+    student_id_input,
+    mo.hstack([count_input, order_input])
+])</code></pre>
+
+<pre><code class="language-python"># Fetch logs from your server
+params = {
+    "sid": student_id_input.value,
+    "trial": trial_input.value,
+    "n": count_input.value,
+    "order": order_input.value
+}
+logs = req.get("http://localhost:9000/logs", params=params).json()["logs"]
+print(f"Fetched {len(logs)} logs")
+                </code></pre>
+                
+                <pre><code class="language-python"># Extract data points from logs
+log_xs = []
+
+# Debug: Print first few logs to see structure
+print("First few logs:")
+for i, log in enumerate(logs[:3]):
+    print(f"Log {i}: {log}")
+
+# Extract x values from logs
+for log in logs:
+    try:
+        args = log.get('args_json', [])
+        if isinstance(args, str):
+            args = json.loads(args)
+
+        # Debug: Print args structure
+        print(f"Args: {args}, type: {type(args)}")
+
+        # Try different possible structures
+        if isinstance(args, list):
+            if len(args) == 1 and isinstance(args[0], list) and len(args[0]) == 2:
+                # Structure: [[x, y]]
+                x, y = args[0]
+                log_xs.append(x)
+            elif len(args) == 2:
+                # Structure: [x, y]
+                x, y = args
+                log_xs.append(x)
+            elif len(args) == 1:
+                # Structure: [x] (single value)
+                log_xs.append(args[0])
+    except Exception as e:
+        print(f"Error processing log: {e}")
+        continue
+
+print(f"Extracted {len(log_xs)} x values: {log_xs[:5]}...")
+
+# Plot
+f = lambda x: (x-10)*(x-30)  # square function
+
+plt.figure(figsize=(10, 6))
+
+# Plot function
+x_range = np.linspace(0, 40, 1000)
+plt.plot(x_range, f(x_range), 'b-', label='f(x) = (x-10)(x-30)')
+
+# Plot student results
+if log_xs:
+    bsearch = np.array(log_xs)
+    alphas = np.linspace(0.3, 1, len(bsearch))
+    colors = [(1, 0, 0, a) for a in alphas]
+    
+    sns.scatterplot(x=bsearch, y=f(bsearch), marker="o", color=colors, label="root approximations")
+    print(f"Plotted {len(log_xs)} student results")
+else:
+    print("No log data to plot!")
+
+plt.title("Root Finding Method")
+plt.xlabel('x')
+plt.ylabel('f(x)')
+plt.legend()
+plt.grid(True, alpha=0.3)
+plt.show()</code></pre>
+
+                <pre><code class="language-python">import marimo as mo
+import requests as req
+import numpy as np
+import seaborn as sns
+import json
+import matplotlib.pyplot as plt</code></pre>
+
+            </marimo-iframe>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = window.location.origin;
+
+        // Require authentication to view dashboard
+        (async () => {
+            try {
+                const resp = await fetch(`${API_BASE_URL}/admin/ping`, { credentials: 'include' });
+                if (!resp.ok) {
+                    window.location.href = 'login.html';
+                }
+            } catch (e) {
+                window.location.href = 'login.html';
+            }
+        })();
+    </script>
+</body>
+</html>
