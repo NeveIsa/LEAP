@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Monte Carlo Random Actions</title>
+  <link rel="stylesheet" href="style/main.css" />
+  <style>
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .controls .field { display: flex; flex-direction: column; gap: 6px; }
+    .panel {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      background: linear-gradient(135deg, rgba(17, 24, 39, 0.9), rgba(30, 41, 59, 0.92));
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 18px 32px rgba(2,6,23,.32);
+    }
+    html[data-theme='light'] .panel {
+      background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(243,244,246,0.98));
+      box-shadow: 0 16px 30px rgba(15,20,34,.12);
+    }
+    .panel h3 { font-size: 20px; margin: 0; color: var(--primary-color); }
+    .panel p { margin: 0; color: var(--muted-color); font-size: 14px; }
+    .result {
+      display:flex; align-items:center; justify-content:center; min-height: 64px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace; font-size: 20px;
+      color: var(--secondary-color);
+      background: linear-gradient(180deg, rgba(28,36,54,.96), rgba(25,34,51,.92));
+      border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px;
+      box-shadow: 0 10px 20px rgba(2,6,23,.28), inset 0 1px 0 rgba(255,255,255,.04);
+    }
+    html[data-theme='light'] .result {
+      color: #0f1422;
+      background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(247,249,252,.96));
+      box-shadow: 0 10px 20px rgba(15,20,34,.12), inset 0 1px 0 rgba(255,255,255,.6);
+    }
+    #sample-btn {
+      height: 56px;
+      font-size: 18px;
+      font-weight: 700;
+      border-radius: 12px;
+      width: 100%;
+    }
+    .msg { font-size: 13px; color: var(--muted-color); min-height: 1.2em; margin-top: 8px; }
+    .msg.ok { color: var(--success-color); }
+    .msg.err { color: var(--error-color); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="toolbar" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+      <a href="dashboard.html">&larr; Back</a>
+      <div style="flex:1"></div>
+      <span class="badge" id="active">Active: ...</span>
+    </div>
+    <h1>Monte Carlo Random Actions</h1>
+    <p style="margin-top:-6px; color: var(--muted-color);">Sample random points from the square [-1, 1] x [-1, 1] to feed the Monte Carlo visualization.</p>
+
+    <div class="controls">
+      <div class="field">
+        <label for="studentId">Student ID</label>
+        <input id="studentId" type="text" placeholder="e.g. s001" />
+      </div>
+      <div class="field">
+        <label for="experimentName">Experiment Name</label>
+        <input id="experimentName" type="text" placeholder="auto-detected" disabled />
+      </div>
+      <div class="field">
+        <label for="trial">Trial Name / ID</label>
+        <input id="trial" type="text" placeholder="e.g. mc-lesson-1" />
+      </div>
+    </div>
+
+    <div class="panel">
+      <div>
+        <h3>Uniform Point in [-1, 1]^2</h3>
+        <p>Each click samples a new point and logs it via the server.</p>
+      </div>
+      <div class="result" id="sample-output">--</div>
+      <button class="btn" id="sample-btn">Sample Point</button>
+      <div class="msg" id="sample-msg"></div>
+    </div>
+  </div>
+
+  <script>
+    const sidEl = document.getElementById('studentId');
+    const expNameEl = document.getElementById('experimentName');
+    const trialEl = document.getElementById('trial');
+    const outputEl = document.getElementById('sample-output');
+    const msgEl = document.getElementById('sample-msg');
+
+    sidEl.value = localStorage.getItem('monte.random.sid') || '';
+    expNameEl.value = localStorage.getItem('monte.random.expName') || '';
+    trialEl.value = localStorage.getItem('monte.random.trial') || '';
+
+    sidEl.addEventListener('input', () => localStorage.setItem('monte.random.sid', sidEl.value.trim()));
+    expNameEl.addEventListener('input', () => localStorage.setItem('monte.random.expName', expNameEl.value.trim()));
+    trialEl.addEventListener('input', () => localStorage.setItem('monte.random.trial', trialEl.value.trim()));
+
+    (async () => {
+      try {
+        const match = window.location.pathname.match(/\/exp\/([^\/]+)/);
+        if (match && match[1]) {
+          if (!expNameEl.value) {
+            expNameEl.value = match[1];
+            localStorage.setItem('monte.random.expName', expNameEl.value.trim());
+          }
+          return;
+        }
+        if (!expNameEl.value) {
+          const res = await fetch(`${window.location.origin}/api/active-experiment`).catch(() => null);
+          if (res && res.ok) {
+            const data = await res.json();
+            if (data && data.active && !expNameEl.value) {
+              expNameEl.value = data.active;
+              localStorage.setItem('monte.random.expName', expNameEl.value.trim());
+            }
+          }
+        }
+      } catch (_) {}
+    })();
+
+    (async function(){
+      try {
+        const res = await fetch(`${window.location.origin}/api/active-experiment`);
+        if (res.ok) {
+          const data = await res.json();
+          document.getElementById('active').textContent = `Active: ${data.active || 'none'}`;
+        }
+      } catch {}
+    })();
+
+    function randomPoint() {
+      const x = 2 * Math.random() - 1;
+      const y = 2 * Math.random() - 1;
+      return [Number(x.toFixed(6)), Number(y.toFixed(6))];
+    }
+
+    function nowIso() { return new Date().toISOString(); }
+
+    function ensureRequiredFields() {
+      const sid = sidEl.value.trim();
+      if (!sid) throw new Error('Please enter Student ID');
+      const trial = trialEl.value.trim();
+      if (!trial) throw new Error('Please enter Trial Name/ID');
+      return { sid, trial };
+    }
+
+    async function sendResult(value) {
+      const { sid, trial } = ensureRequiredFields();
+      const payload = { kind: 'u2_pm', value, ts: nowIso() };
+      let experiment_name = '';
+      try {
+        const r = await fetch(`${window.location.origin}/api/active-experiment`);
+        if (r.ok) {
+          const d = await r.json();
+          experiment_name = d.active || '';
+        }
+      } catch {}
+      const body = { student_id: sid, func_name: 'echo', args: [payload], trial, experiment_name };
+      const url = `${window.location.origin}/call`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) {
+        let message = '';
+        try {
+          const data = await res.json();
+          if (data && data.detail !== undefined) {
+            message = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail);
+          }
+        } catch {
+          try { message = await res.text(); } catch {}
+        }
+        throw new Error(message || `HTTP ${res.status}`);
+      }
+      return res.json();
+    }
+
+    document.getElementById('sample-btn').addEventListener('click', async () => {
+      try {
+        const value = randomPoint();
+        outputEl.textContent = JSON.stringify(value);
+        msgEl.textContent = 'Logging...';
+        msgEl.className = 'msg';
+        await sendResult(value);
+        msgEl.textContent = 'Logged';
+        msgEl.className = 'msg ok';
+      } catch (err) {
+        msgEl.textContent = (err && err.message) ? err.message : String(err);
+        msgEl.className = 'msg err';
+      }
+    });
+  </script>
+  <script src="scripts/theme.js"></script>
+</body>
+</html>

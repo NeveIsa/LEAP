@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monte Carlo Visualization</title>
+    <link rel="stylesheet" href="style/main.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@marimo-team/marimo-snippets@1"></script>
+    <style>
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        .back-btn {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .back-btn:hover {
+            background: #545b62;
+        }
+        .notebook-section {
+            margin-bottom: 40px;
+        }
+        .notebook-title {
+            color: #e0e0e0;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+    </style>
+</head>
+<body class="page-centered">
+    <div class="container">
+        <div class="header">
+            <h1 style="margin:0; color: #e0e0e0;">Monte Carlo Visualization</h1>
+            <a href="dashboard.html" class="back-btn">Back to Dashboard</a>
+        </div>
+
+        <div class="notebook-section">
+            <h2 class="notebook-title">Instructor Visualization</h2>
+            <marimo-iframe data-theme="dark" data-height="720px">
+                <pre><code class="language-python">import json
+import marimo as mo
+import matplotlib.pyplot as plt
+import numpy as np
+import requests as req
+                </code></pre>
+
+                <pre><code class="language-python">mo.md("""
+## Monte Carlo Log Visualization
+
+1. Use the Monte Carlo "Random Actions" page to generate samples for the class under a shared trial name.
+2. Fill in the trial below (student ID is optional metadata) and run the log fetch cell.
+3. Run the plotting cell to view the sampled points, highlighting those inside the unit circle.
+4. Review the inside/outside ratio and observe how the estimate converges toward a constant.
+
+Run the cells from top to bottom after updating any parameters.
+""")</code></pre>
+
+                <pre><code class="language-python"># Configure log query parameters
+student_id_input = mo.ui.text(
+    value="",
+    placeholder="e.g. s001",
+    label="Student ID (sid)"
+)
+
+trial_input = mo.ui.text(
+    value="",
+    placeholder="e.g. mc-lesson-1",
+    label="Trial tag"
+)
+
+count_input = mo.ui.number(
+    value=200,
+    start=1,
+    stop=10000,
+    step=1,
+    label="Number of logs (n)"
+)
+
+order_input = mo.ui.dropdown(
+    options=["latest", "earliest"],
+    value="latest",
+    label="Order"
+)
+
+mo.vstack([
+    mo.md("**Log Fetch Parameters**"),
+    student_id_input,
+    trial_input,
+    mo.hstack([count_input, order_input])
+])</code></pre>
+
+                <pre><code class="language-python"># Fetch logs from the server
+params = {"n": count_input.value, "order": order_input.value}
+if trial_input.value:
+    params["trial"] = trial_input.value
+
+response = req.get("http://localhost:9000/logs", params=params)
+response.raise_for_status()
+logs = response.json().get("logs", [])
+print(f"Fetched {len(logs)} logs")
+                </code></pre>
+
+                <pre><code class="language-python"># Extract Monte Carlo points from logs
+def extract_point(entry):
+    args = entry.get("args_json", [])
+    if isinstance(args, str):
+        try:
+            args = json.loads(args)
+        except json.JSONDecodeError:
+            return None
+
+    if not isinstance(args, list) or not args:
+        return None
+
+    payload = args[0]
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except json.JSONDecodeError:
+            return None
+
+    if not isinstance(payload, dict):
+        return None
+
+    if payload.get("kind") != "u2_pm":
+        return None
+
+    value = payload.get("value")
+    if not (isinstance(value, (list, tuple)) and len(value) == 2):
+        return None
+
+    try:
+        x = float(value[0])
+        y = float(value[1])
+    except (TypeError, ValueError):
+        return None
+
+    return x, y
+
+
+points = [pt for log in logs if (pt := extract_point(log)) is not None]
+inside_mask = [x * x + y * y <= 1.0 for x, y in points]
+inside = sum(inside_mask)
+outside = len(points) - inside
+ratio = (inside / outside) if outside else float("inf")
+pi_estimate = (4 * inside / len(points)) if points else float("nan")
+
+print(f"Processed {len(points)} Monte Carlo points")
+                </code></pre>
+
+                <pre><code class="language-python"># Plot sampled points against the unit circle
+plt.figure(figsize=(8, 8))
+ax = plt.gca()
+ax.set_aspect('equal', 'box')
+ax.set_xlim(-1.1, 1.1)
+ax.set_ylim(-1.1, 1.1)
+
+# Draw square boundary
+ax.plot([-1, 1, 1, -1, -1], [-1, -1, 1, 1, -1], color='#94a3b8', linewidth=1.2, label='Square boundary')
+
+# Draw unit circle
+theta = np.linspace(0, 2 * np.pi, 360)
+ax.plot(np.cos(theta), np.sin(theta), color='#22d3ee', linewidth=1.4, label='Unit circle')
+
+if points:
+    pts = np.array(points)
+    inside_pts = pts[np.array(inside_mask)]
+    outside_pts = pts[~np.array(inside_mask)]
+
+    if len(inside_pts):
+        ax.scatter(inside_pts[:, 0], inside_pts[:, 1], c='#34d399', label=f'Inside ({len(inside_pts)})', alpha=0.8)
+    if len(outside_pts):
+        ax.scatter(outside_pts[:, 0], outside_pts[:, 1], c='#f87171', label=f'Outside ({len(outside_pts)})', alpha=0.8)
+else:
+    plt.text(0, 0, 'No Monte Carlo points found', ha='center', va='center', color='#e5e7eb', fontsize=14)
+
+plt.title('Monte Carlo Sampling Ratio')
+plt.xlabel('x')
+plt.ylabel('y')
+plt.grid(alpha=0.2)
+plt.legend(loc='upper right')
+plt.show()
+                </code></pre>
+
+                <pre><code class="language-python">ratio_text = 'Inside/Outside ratio: N/A'
+if points:
+    ratio_value = 'Infinity' if ratio == float('inf') else round(ratio, 3)
+    ratio_text = f"Inside/Outside ratio: {ratio_value}"
+
+estimate_text = "Estimate unavailable"
+if points and np.isfinite(pi_estimate):
+    estimate_text = f"Current estimate: {round(pi_estimate, 4)} (converging toward this number)"
+
+mo.vstack([
+    mo.md(f"**Inside points:** {inside}"),
+    mo.md(f"**Outside points:** {outside}" if outside else "**Outside points:** 0"),
+    mo.md(f"<span style='font-size:26px; font-weight:600;'>{ratio_text}</span>"),
+    mo.md(estimate_text)
+])
+                </code></pre>
+            </marimo-iframe>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = window.location.origin;
+
+        // Require authentication to view dashboard
+        (async () => {
+            try {
+                const resp = await fetch(`${API_BASE_URL}/admin/ping`, { credentials: 'include' });
+                if (!resp.ok) {
+                    window.location.href = 'login.html';
+                }
+            } catch (e) {
+                window.location.href = 'login.html';
+            }
+        })();
+    </script>
+</body>
+</html>
