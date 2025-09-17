@@ -34,6 +34,6 @@ def estimate_pi(samples: int = 10000) -> float:
 
 
 def echo(value):
-    """Return the input value unchanged so UIs can log arbitrary payloads."""
+    """Return the input value unchanged. Useful for logging arbitrary payloads via /call."""
 
     return value

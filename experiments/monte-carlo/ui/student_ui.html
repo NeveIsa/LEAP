@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Simulations</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
+        :root {
+            --primary-color: #00f5d4; /* Vibrant teal */
+            --secondary-color: #f0f0f0; /* Light text */
+            --background-color: #1a1a1a;
+            --surface-color: #2a2a2a;
+            --border-color: #444;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--background-color);
+            color: var(--secondary-color);
+            line-height: 1.6;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 800px;
+            margin: 20px;
+        }
+
+        header h1 {
+            color: var(--primary-color);
+            text-align: center;
+            margin-bottom: 40px;
+            font-weight: 600;
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            
+        }
+
+        .grid-item {
+            background-color: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            min-height: 200px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            text-align: center;
+        }
+
+        .grid-item.empty {
+            background-color: transparent;
+            border: 1px dashed var(--border-color);
+        }
+
+        .grid-item h3 {
+            color: var(--primary-color);
+            font-weight: 500;
+            margin-bottom: 15px;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: var(--primary-color);
+            color: #1a1a1a;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: transform 0.2s, background-color 0.3s;
+            margin-top: 15px;
+        }
+
+        .btn:hover {
+            background-color: #00e0c0;
+            transform: translateY(-2px);
+        }
+
+        .output {
+            font-weight: 600;
+            margin-top: 10px;
+            min-height: 50px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #dice-output, #double-dice-output {
+            font-size: 4rem; /* Larger size for dice */
+        }
+
+        .output {
+            font-size: 1.5rem;
+        }
+        
+        #dice-value, #coin-value, #double-dice-value {
+            font-size: 1.2rem;
+            margin-top: 5px;
+            color: var(--secondary-color);
+            min-height: 22px;
+        }
+
+        /* Coin Flip Animation */
+        .coin-container {
+            perspective: 1000px;
+            width: 80px;
+            height: 80px;
+        }
+
+        .coin-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            transition: transform 0.6s;
+            transform-style: preserve-3d;
+        }
+
+        .coin-container.flipping .coin-inner {
+            transform: rotateY(180deg);
+        }
+
+        .coin-front, .coin-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 4rem;
+        }
+
+        .coin-back {
+            transform: rotateY(180deg);
+            font-size: 2.5rem;
+        }
+
+        /* Dice Roll Animation */
+        @keyframes roll {
+            0% { transform: rotate(0deg) scale(1); }
+            50% { transform: rotate(180deg) scale(1.2); }
+            100% { transform: rotate(360deg) scale(1); }
+        }
+
+        .rolling {
+            animation: roll 0.5s ease-out;
+        }
+
+        .interval-inputs {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .interval-inputs input {
+            width: 80px;
+            padding: 5px;
+            border-radius: 3px;
+            border: 1px solid var(--border-color);
+            background-color: var(--background-color);
+            color: var(--secondary-color);
+            text-align: center;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Student Interactives</h1>
+        </header>
+        <div class="grid-container">
+            <!-- Flipping Coin -->
+            <div class="grid-item">
+                <h3>Flip a Coin</h3>
+                <div class="coin-container" id="coin-container">
+                    <div class="coin-inner">
+                        <div class="coin-front">🪙</div>
+                        <div class="coin-back" id="coin-back">H</div>
+                    </div>
+                </div>
+                <div id="coin-value"></div>
+                <button class="btn" id="coin-btn">Flip</button>
+            </div>
+
+            <!-- Rolling Dice -->
+            <div class="grid-item">
+                <h3>Roll a Die</h3>
+                <div class="output" id="dice-output">⚅</div>
+                <div id="dice-value">Value: 6</div>
+                <button class="btn" id="dice-btn">Roll</button>
+            </div>
+
+            <!-- Double Dice Rolls -->
+            <div class="grid-item">
+                <h3>Roll Two Dice</h3>
+                <div class="output" id="double-dice-output">⚀⚅</div>
+                <div id="double-dice-value">Value: 7</div>
+                <button class="btn" id="double-dice-btn">Roll</button>
+            </div>
+
+            <!-- Random Number -->
+            <div class="grid-item">
+                <h3>Random Number (1-100)</h3>
+                <div class="output" id="random-num-output">?</div>
+                <button class="btn" id="random-num-btn">Generate</button>
+            </div>
+
+            <!-- Random Number (-100 to 100) -->
+            <div class="grid-item">
+                <h3>Random Number (-100 to 100)</h3>
+                <div class="output" id="random-num-neg-output">?</div>
+                <button class="btn" id="random-num-neg-btn">Generate</button>
+            </div>
+
+            <!-- Random Number by Interval -->
+            <div class="grid-item">
+                <h3>Random Number from Interval</h3>
+                <div class="interval-inputs">
+                    <input type="number" id="min-interval" placeholder="Min" style="width: 60px;">
+                    <input type="number" id="max-interval" placeholder="Max" style="width: 60px;">
+                </div>
+                <div class="output" id="interval-random-num-output">?</div>
+                <button class="btn" id="interval-random-num-btn">Generate</button>
+            </div>
+
+            <!-- 2D Random Point -->
+            <div class="grid-item">
+                <h3>2D Random Point [0,1]</h3>
+                <div class="output" id="2d-point-output">(x, y)</div>
+                <button class="btn" id="2d-point-btn">Generate</button>
+            </div>
+
+            <!-- 2D Gaussian -->
+            <div class="grid-item">
+                <h3>2D Gaussian Point</h3>
+                <div class="output" id="2d-gaussian-output">(x, y)</div>
+                <button class="btn" id="2d-gaussian-btn">Generate</button>
+            </div>
+
+            <!-- Standard Normal Deviate -->
+            <div class="grid-item">
+                <h3>Standard Normal Deviate</h3>
+                <div class="output" id="normal-dev-output">Z</div>
+                <button class="btn" id="normal-dev-btn">Generate</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Dice Roll
+        document.getElementById('dice-btn').addEventListener('click', () => {
+            const diceOutput = document.getElementById('dice-output');
+            const diceValue = document.getElementById('dice-value');
+            
+            diceOutput.classList.add('rolling');
+            
+            setTimeout(() => {
+                const result = Math.floor(Math.random() * 6) + 1;
+                const diceFaces = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+                diceOutput.textContent = diceFaces[result - 1];
+                diceValue.textContent = `Value: ${result}`;
+                diceOutput.classList.remove('rolling');
+            }, 500);
+        });
+
+        // Coin Flip
+        document.getElementById('coin-btn').addEventListener('click', () => {
+            const coinContainer = document.getElementById('coin-container');
+            const coinBack = document.getElementById('coin-back');
+            const coinValue = document.getElementById('coin-value');
+
+            if (coinContainer.classList.contains('flipping')) return;
+
+            const isHeads = Math.random() < 0.5;
+            const result = isHeads ? 'Heads' : 'Tails';
+            
+            coinBack.textContent = isHeads ? 'H' : 'T';
+            coinValue.textContent = '';
+
+            coinContainer.classList.add('flipping');
+
+            setTimeout(() => {
+                coinValue.textContent = result;
+                coinContainer.classList.remove('flipping');
+            }, 600);
+        });
+
+        // Random Number
+        document.getElementById('random-num-btn').addEventListener('click', () => {
+            const randomNumOutput = document.getElementById('random-num-output');
+            const result = Math.floor(Math.random() * 100) + 1;
+            randomNumOutput.textContent = result;
+        });
+
+        // Standard Normal Deviate (Box-Muller transform)
+        document.getElementById('normal-dev-btn').addEventListener('click', () => {
+            const normalDevOutput = document.getElementById('normal-dev-output');
+            let u = 0, v = 0;
+            while(u === 0) u = Math.random(); //Converting [0,1) to (0,1)
+            while(v === 0) v = Math.random();
+            const result = Math.sqrt( -2.0 * Math.log( u ) ) * Math.cos( 2.0 * Math.PI * v );
+            normalDevOutput.textContent = result.toFixed(4);
+        });
+
+        // 2D Random Point
+        document.getElementById('2d-point-btn').addEventListener('click', () => {
+            const pointOutput = document.getElementById('2d-point-output');
+            const x = Math.random().toFixed(3);
+            const y = Math.random().toFixed(3);
+            pointOutput.textContent = `(${x}, ${y})`;
+        });
+
+        // 2D Gaussian Point
+        document.getElementById('2d-gaussian-btn').addEventListener('click', () => {
+            const gaussianOutput = document.getElementById('2d-gaussian-output');
+            let u1 = 0, u2 = 0;
+            while(u1 === 0) u1 = Math.random();
+            while(u2 === 0) u2 = Math.random();
+            const z1 = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+            const z2 = Math.sqrt(-2.0 * Math.log(u1)) * Math.sin(2.0 * Math.PI * u2);
+            gaussianOutput.textContent = `(${z1.toFixed(3)}, ${z2.toFixed(3)})`;
+        });
+
+        // Double Dice Roll
+        document.getElementById('double-dice-btn').addEventListener('click', () => {
+            const doubleDiceOutput = document.getElementById('double-dice-output');
+            const doubleDiceValue = document.getElementById('double-dice-value');
+            
+            doubleDiceOutput.classList.add('rolling');
+            
+            setTimeout(() => {
+                const result1 = Math.floor(Math.random() * 6) + 1;
+                const result2 = Math.floor(Math.random() * 6) + 1;
+                const diceFaces = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+                doubleDiceOutput.textContent = diceFaces[result1 - 1] + diceFaces[result2 - 1];
+                doubleDiceValue.textContent = `Value: ${result1 + result2}`;
+                doubleDiceOutput.classList.remove('rolling');
+            }, 500);
+        });
+
+        // Random Number (-100 to 100)
+        document.getElementById('random-num-neg-btn').addEventListener('click', () => {
+            const randomNumNegOutput = document.getElementById('random-num-neg-output');
+            const result = Math.floor(Math.random() * 201) - 100;
+            randomNumNegOutput.textContent = result;
+        });
+
+        // Random Number by Interval
+        document.getElementById('interval-random-num-btn').addEventListener('click', () => {
+            const min = parseInt(document.getElementById('min-interval').value);
+            const max = parseInt(document.getElementById('max-interval').value);
+            const intervalRandomNumOutput = document.getElementById('interval-random-num-output');
+
+            if (isNaN(min) || isNaN(max)) {
+                intervalRandomNumOutput.textContent = 'Invalid Input';
+                return;
+            }
+
+            if (min >= max) {
+                intervalRandomNumOutput.textContent = 'Min < Max';
+                return;
+            }
+
+            const result = Math.floor(Math.random() * (max - min + 1)) + min;
+            intervalRandomNumOutput.textContent = result;
+        });
+
+    </script>
+</body>
+</html>

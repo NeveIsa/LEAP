@@ -9,6 +9,8 @@
   <title>Monte Carlo Random Actions</title>
   <link rel="stylesheet" href="style/main.css" />
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+    body { font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
     .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 20px; }
     .controls .field { display: flex; flex-direction: column; gap: 6px; }
     .panel {
@@ -27,6 +29,18 @@
     }
     .panel h3 { font-size: 20px; margin: 0; color: var(--primary-color); }
     .panel p { margin: 0; color: var(--muted-color); font-size: 14px; }
+    .viz {
+      display: grid; grid-template-columns: 1fr 360px; gap: 18px; align-items: center;
+    }
+    @media (max-width: 900px) { .viz { grid-template-columns: 1fr; } }
+    .viz-card {
+      background: linear-gradient(180deg, rgba(28,36,54,.96), rgba(25,34,51,.92));
+      border: 1px solid var(--border-color); border-radius: 16px; padding: 16px;
+      box-shadow: 0 10px 20px rgba(2,6,23,.28), inset 0 1px 0 rgba(255,255,255,.04);
+    }
+    html[data-theme='light'] .viz-card { background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(247,249,252,.96)); }
+    .square-wrap { display:flex; align-items:center; justify-content:center; }
+    #unit-square { width: 360px; height: 360px; border-radius: 14px; display:block; }
     .result {
       display:flex; align-items:center; justify-content:center; min-height: 64px;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace; font-size: 20px;
@@ -50,6 +64,7 @@
     .msg { font-size: 13px; color: var(--muted-color); min-height: 1.2em; margin-top: 8px; }
     .msg.ok { color: var(--success-color); }
     .msg.err { color: var(--error-color); }
+    .hint { font-size: 12px; color: var(--muted-color); }
   </style>
 </head>
 <body>
@@ -60,7 +75,7 @@
       <span class="badge" id="active">Active: ...</span>
     </div>
     <h1>Monte Carlo Random Actions</h1>
-    <p style="margin-top:-6px; color: var(--muted-color);">Sample random points from the square [-1, 1] x [-1, 1] to feed the Monte Carlo visualization.</p>
+    <p style="margin-top:-6px; color: var(--muted-color);">Sample random points from the square [-1, 1] x [-1, 1]. This page is preview-only for this experiment (no server logging).</p>
 
     <div class="controls">
       <div class="field">
@@ -79,12 +94,22 @@
 
     <div class="panel">
       <div>
-        <h3>Uniform Point in [-1, 1]^2</h3>
-        <p>Each click samples a new point and logs it via the server.</p>
+        <h3>Uniform Point in [-1, 1]<sup>2</sup></h3>
+        <p>Each click samples a new point and previews it on the square.</p>
       </div>
-      <div class="result" id="sample-output">--</div>
-      <button class="btn" id="sample-btn">Sample Point</button>
-      <div class="msg" id="sample-msg"></div>
+      <div class="viz">
+        <div>
+          <div class="result" id="sample-output">--</div>
+          <button class="btn" id="sample-btn" style="margin-top:12px;">Sample Point</button>
+          <div class="msg" id="sample-msg"></div>
+          <div class="hint">Preview only; data is not sent to the server.</div>
+        </div>
+        <div class="viz-card">
+          <div class="square-wrap">
+            <canvas id="unit-square" width="360" height="360"></canvas>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -94,6 +119,8 @@
     const trialEl = document.getElementById('trial');
     const outputEl = document.getElementById('sample-output');
     const msgEl = document.getElementById('sample-msg');
+    const canvas = document.getElementById('unit-square');
+    const ctx = canvas.getContext('2d');
 
     sidEl.value = localStorage.getItem('monte.random.sid') || '';
     expNameEl.value = localStorage.getItem('monte.random.expName') || '';
@@ -157,10 +184,10 @@
       const payload = { kind: 'u2_pm', value, ts: nowIso() };
       let experiment_name = '';
       try {
-        const r = await fetch(`${window.location.origin}/api/active-experiment`);
-        if (r.ok) {
-          const d = await r.json();
-          experiment_name = d.active || '';
+        const res = await fetch(`${window.location.origin}/api/active-experiment`);
+        if (res.ok) {
+          const data = await res.json();
+          experiment_name = data.active || '';
         }
       } catch {}
       const body = { student_id: sid, func_name: 'echo', args: [payload], trial, experiment_name };
@@ -185,10 +212,94 @@
       return res.json();
     }
 
+    // Drawing helpers
+    function drawScene(point) {
+      const w = canvas.width, h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+      // Background
+      const grad = ctx.createLinearGradient(0, 0, w, h);
+      grad.addColorStop(0, '#0f172a');
+      grad.addColorStop(1, '#111827');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+      // Inner panel
+      ctx.save();
+      ctx.translate(12, 12);
+      const sz = w - 24;
+      // Square background
+      ctx.fillStyle = 'rgba(148,163,184,0.06)';
+      ctx.strokeStyle = 'rgba(148,163,184,0.5)';
+      ctx.lineWidth = 1.2;
+      roundRect(ctx, 0, 0, sz, sz, 12, true, true);
+      // Grid
+      ctx.strokeStyle = 'rgba(148,163,184,0.25)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let i = 1; i < 10; i++) {
+        const t = (i / 10) * sz;
+        ctx.moveTo(t, 0); ctx.lineTo(t, sz);
+        ctx.moveTo(0, t); ctx.lineTo(sz, t);
+      }
+      ctx.stroke();
+      // Unit circle
+      ctx.strokeStyle = '#22d3ee';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.arc(sz/2, sz/2, sz/2, 0, Math.PI * 2);
+      ctx.stroke();
+      // Axes
+      ctx.strokeStyle = 'rgba(148,163,184,0.6)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(sz/2, 0); ctx.lineTo(sz/2, sz);
+      ctx.moveTo(0, sz/2); ctx.lineTo(sz, sz/2);
+      ctx.stroke();
+      // Point
+      if (point) {
+        const [x, y] = point; // in [-1,1]
+        const px = ((x + 1) / 2) * sz;
+        const py = ((1 - (y + 1) / 2)) * sz;
+        const inside = (x*x + y*y) <= 1;
+        const r = 6;
+        const glow = ctx.createRadialGradient(px, py, 0, px, py, 16);
+        glow.addColorStop(0, inside ? 'rgba(52,211,153,0.6)' : 'rgba(248,113,113,0.6)');
+        glow.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = glow;
+        ctx.beginPath(); ctx.arc(px, py, 16, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = inside ? '#34d399' : '#f87171';
+        ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI*2); ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function roundRect(ctx, x, y, width, height, radius, fill, stroke) {
+      if (typeof radius === 'number') {
+        radius = {tl: radius, tr: radius, br: radius, bl: radius};
+      } else {
+        radius = Object.assign({tl: 0, tr: 0, br: 0, bl: 0}, radius);
+      }
+      ctx.beginPath();
+      ctx.moveTo(x + radius.tl, y);
+      ctx.lineTo(x + width - radius.tr, y);
+      ctx.quadraticCurveTo(x + width, y, x + width, y + radius.tr);
+      ctx.lineTo(x + width, y + height - radius.br);
+      ctx.quadraticCurveTo(x + width, y + height, x + width - radius.br, y + height);
+      ctx.lineTo(x + radius.bl, y + height);
+      ctx.quadraticCurveTo(x, y + height, x, y + height - radius.bl);
+      ctx.lineTo(x, y + radius.tl);
+      ctx.quadraticCurveTo(x, y, x + radius.tl, y);
+      ctx.closePath();
+      if (fill) ctx.fill();
+      if (stroke) ctx.stroke();
+    }
+
+    drawScene();
+
     document.getElementById('sample-btn').addEventListener('click', async () => {
       try {
         const value = randomPoint();
         outputEl.textContent = JSON.stringify(value);
+        drawScene(value);
         msgEl.textContent = 'Logging...';
         msgEl.className = 'msg';
         await sendResult(value);
@@ -203,3 +314,4 @@
   <script src="scripts/theme.js"></script>
 </body>
 </html>
+

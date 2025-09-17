@@ -69,12 +69,6 @@ Run the cells from top to bottom after updating any parameters.
 """)</code></pre>
 
                 <pre><code class="language-python"># Configure log query parameters
-student_id_input = mo.ui.text(
-    value="",
-    placeholder="e.g. s001",
-    label="Student ID (sid)"
-)
-
 trial_input = mo.ui.text(
     value="",
     placeholder="e.g. mc-lesson-1",
@@ -97,12 +91,12 @@ order_input = mo.ui.dropdown(
 
 mo.vstack([
     mo.md("**Log Fetch Parameters**"),
-    student_id_input,
     trial_input,
     mo.hstack([count_input, order_input])
 ])</code></pre>
 
                 <pre><code class="language-python"># Fetch logs from the server
+_ = refresh_button.value
 params = {"n": count_input.value, "order": order_input.value}
 if trial_input.value:
     params["trial"] = trial_input.value
@@ -111,6 +105,14 @@ response = req.get("http://localhost:9000/logs", params=params)
 response.raise_for_status()
 logs = response.json().get("logs", [])
 print(f"Fetched {len(logs)} logs")
+                </code></pre>
+
+                <pre><code class="language-python"># Refresh plot and log retrieval
+refresh_button = mo.ui.refresh(
+    default_interval="1s",
+)
+
+refresh_button
                 </code></pre>
 
                 <pre><code class="language-python"># Extract Monte Carlo points from logs
@@ -162,7 +164,8 @@ print(f"Processed {len(points)} Monte Carlo points")
                 </code></pre>
 
                 <pre><code class="language-python"># Plot sampled points against the unit circle
-plt.figure(figsize=(8, 8))
+_ = refresh_button.value
+plot = plt.figure(figsize=(8, 8))
 ax = plt.gca()
 ax.set_aspect('equal', 'box')
 ax.set_xlim(-1.1, 1.1)
@@ -192,7 +195,6 @@ plt.xlabel('x')
 plt.ylabel('y')
 plt.grid(alpha=0.2)
 plt.legend(loc='upper right')
-plt.show()
                 </code></pre>
 
                 <pre><code class="language-python">ratio_text = 'Inside/Outside ratio: N/A'
