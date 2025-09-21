@@ -156,6 +156,9 @@
 
     let currentFunction = null;
     let maxFunctionValue = 1;
+    
+    // Store previous points for persistence
+    let previousPoints = [];
 
     sidEl.value = localStorage.getItem('monte.function.sid') || '';
     expNameEl.value = localStorage.getItem('monte.function.expName') || '';
@@ -179,6 +182,8 @@
           
           // Calculate max function value for plotting
           calculateMaxFunctionValue();
+          // Clear previous points when function changes
+          previousPoints = [];
           drawScene();
           return true;
         } else {
@@ -316,7 +321,7 @@
     }
 
     // Drawing helpers
-    function drawScene(point) {
+    function drawScene(newPoint) {
       const w = canvas.width, h = canvas.height;
       ctx.clearRect(0, 0, w, h);
       
@@ -400,9 +405,29 @@
       ctx.moveTo(0, plotH); ctx.lineTo(plotW, plotH); // X-axis
       ctx.stroke();
       
-      // Sample point
-      if (point && currentFunction) {
-        const [x, y] = point; // x in [-1,1], y in [0, maxFunctionValue]
+      // Draw all previous points with fading alpha
+      for (let i = 0; i < previousPoints.length; i++) {
+        const point = previousPoints[i];
+        const [x, y] = point.coords;
+        const px = ((x + 1) / 2) * plotW;
+        const py = plotH - (y / maxFunctionValue) * plotH;
+        const underCurve = point.underCurve;
+        
+        // Calculate alpha based on age (newer = more opaque)
+        const age = previousPoints.length - i;
+        const maxAge = Math.min(previousPoints.length, 20); // Show up to 20 previous points
+        const alpha = Math.max(0.1, 1 - (age / maxAge));
+        
+        const r = 4; // Slightly smaller for previous points
+        ctx.fillStyle = underCurve ? `rgba(52,211,153,${alpha})` : `rgba(248,113,113,${alpha})`;
+        ctx.beginPath(); 
+        ctx.arc(px, py, r, 0, Math.PI*2); 
+        ctx.fill();
+      }
+      
+      // Sample point (new point with full opacity)
+      if (newPoint && currentFunction) {
+        const [x, y] = newPoint; // x in [-1,1], y in [0, maxFunctionValue]
         const px = ((x + 1) / 2) * plotW;
         const py = plotH - (y / maxFunctionValue) * plotH;
         
@@ -423,6 +448,18 @@
         ctx.beginPath(); ctx.arc(px, py, 16, 0, Math.PI*2); ctx.fill();
         ctx.fillStyle = underCurve ? '#34d399' : '#f87171';
         ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI*2); ctx.fill();
+        
+        // Add this point to previous points
+        previousPoints.push({
+          coords: [x, y],
+          underCurve: underCurve,
+          timestamp: Date.now()
+        });
+        
+        // Limit the number of stored points to prevent memory issues
+        if (previousPoints.length > 50) {
+          previousPoints.shift(); // Remove oldest point
+        }
       }
       
       ctx.restore();

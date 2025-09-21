@@ -121,6 +121,9 @@
     const msgEl = document.getElementById('sample-msg');
     const canvas = document.getElementById('unit-square');
     const ctx = canvas.getContext('2d');
+    
+    // Store previous points for persistence
+    let previousPoints = [];
 
     sidEl.value = localStorage.getItem('monte.random.sid') || '';
     expNameEl.value = localStorage.getItem('monte.random.expName') || '';
@@ -213,7 +216,7 @@
     }
 
     // Drawing helpers
-    function drawScene(point) {
+    function drawScene(newPoint) {
       const w = canvas.width, h = canvas.height;
       ctx.clearRect(0, 0, w, h);
       // Background
@@ -254,9 +257,30 @@
       ctx.moveTo(sz/2, 0); ctx.lineTo(sz/2, sz);
       ctx.moveTo(0, sz/2); ctx.lineTo(sz, sz/2);
       ctx.stroke();
-      // Point
-      if (point) {
-        const [x, y] = point; // in [-1,1]
+      
+      // Draw all previous points with fading alpha
+      for (let i = 0; i < previousPoints.length; i++) {
+        const point = previousPoints[i];
+        const [x, y] = point.coords;
+        const px = ((x + 1) / 2) * sz;
+        const py = ((1 - (y + 1) / 2)) * sz;
+        const inside = point.inside;
+        
+        // Calculate alpha based on age (newer = more opaque)
+        const age = previousPoints.length - i;
+        const maxAge = Math.min(previousPoints.length, 20); // Show up to 20 previous points
+        const alpha = Math.max(0.1, 1 - (age / maxAge));
+        
+        const r = 4; // Slightly smaller for previous points
+        ctx.fillStyle = inside ? `rgba(52,211,153,${alpha})` : `rgba(248,113,113,${alpha})`;
+        ctx.beginPath(); 
+        ctx.arc(px, py, r, 0, Math.PI*2); 
+        ctx.fill();
+      }
+      
+      // Draw new point (if any) with full opacity
+      if (newPoint) {
+        const [x, y] = newPoint; // in [-1,1]
         const px = ((x + 1) / 2) * sz;
         const py = ((1 - (y + 1) / 2)) * sz;
         const inside = (x*x + y*y) <= 1;
@@ -268,6 +292,18 @@
         ctx.beginPath(); ctx.arc(px, py, 16, 0, Math.PI*2); ctx.fill();
         ctx.fillStyle = inside ? '#34d399' : '#f87171';
         ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI*2); ctx.fill();
+        
+        // Add this point to previous points
+        previousPoints.push({
+          coords: [x, y],
+          inside: inside,
+          timestamp: Date.now()
+        });
+        
+        // Limit the number of stored points to prevent memory issues
+        if (previousPoints.length > 50) {
+          previousPoints.shift(); // Remove oldest point
+        }
       }
       ctx.restore();
     }
