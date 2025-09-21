@@ -156,9 +156,8 @@ def extract_point(entry):
 points = [pt for log in logs if (pt := extract_point(log)) is not None]
 inside_mask = [x * x + y * y <= 1.0 for x, y in points]
 inside = sum(inside_mask)
-outside = len(points) - inside
-ratio = (inside / outside) if outside else float("inf")
-pi_estimate = (4 * inside / len(points)) if points else float("nan")
+total = len(points) - inside
+ratio = (inside / total) if total else float("inf")
 
 print(f"Processed {len(points)} Monte Carlo points")
                 </code></pre>
@@ -197,20 +196,17 @@ plt.grid(alpha=0.2)
 plt.legend(loc='upper right')
                 </code></pre>
 
-                <pre><code class="language-python">ratio_text = 'Inside/Outside ratio: N/A'
+                <pre><code class="language-python">ratio_text = 'Inside/Total ratio: N/A'
 if points:
     ratio_value = 'Infinity' if ratio == float('inf') else round(ratio, 3)
-    ratio_text = f"Inside/Outside ratio: {ratio_value}"
+    ratio_text = f"Inside/Total ratio: {ratio_value}"
 
-estimate_text = "Estimate unavailable"
-if points and np.isfinite(pi_estimate):
-    estimate_text = f"Current estimate: {round(pi_estimate, 4)} (converging toward this number)"
+estimate = ratio_value/np.pi
 
 mo.vstack([
-    mo.md(f"**Inside points:** {inside}"),
-    mo.md(f"**Outside points:** {outside}" if outside else "**Outside points:** 0"),
-    mo.md(f"<span style='font-size:26px; font-weight:600;'>{ratio_text}</span>"),
-    mo.md(estimate_text)
+    mo.md(f"Inside points:** {inside}**"),
+    mo.md(f"Total points:** {total}**" if total else "Total points:** 0**"),
+    mo.md(f"Estimated ratio: **{estimate:.3f} $\pi$**")
 ])
                 </code></pre>
             </marimo-iframe>

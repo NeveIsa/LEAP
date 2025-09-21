@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Monte Carlo - Function Setup</title>
+    <link rel="stylesheet" href="style/main.css" />
+</head>
+<body>
+
+    <div id="notification-container"></div>
+
+    <div class="container">
+
+        <main>
+            <div class="toolbar" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                <a href="dashboard.html">&larr; Back to Monte Carlo Dashboard</a>
+                <div style="flex:1"></div>
+                <span class="badge" id="active-badge">Active: ...</span>
+            </div>
+            <div id="status-banner" style="display:none; margin: 6px 0 12px 0;"></div>
+            
+            <h1>Function Configuration</h1>
+            <p style="margin-top:-6px; color: var(--muted-color);">Define a positive function over the interval [-1, 1] for Monte Carlo integration experiments.</p>
+
+            <details class="collapsible">
+                <summary class="collapsible-summary">Function Definition</summary>
+                <div class="content-section">
+                    <p class="text-muted mb-12">
+                        Enter a mathematical function that is positive over the interval [-1, 1]. 
+                        You can use: <code>Math.sin(x)</code>, <code>sin(x)</code>, <code>Math.exp(x)</code>, <code>exp(x)</code>, 
+                        <code>x*x + 1</code>, <code>Math.cos(x) + 2</code>, <code>sqrt(x*x + 1)</code>, etc.
+                    </p>
+                    <div class="form-row">
+                        <div class="form-group" style="flex: 1;">
+                            <label for="function-expression">Function Expression f(x)</label>
+                            <input type="text" id="function-expression" placeholder="e.g., exp(x) + 1" required>
+                            <small class="text-muted">Function must be positive over [-1, 1]</small>
+                        </div>
+                        <button type="button" id="validate-btn" class="btn">Validate & Preview</button>
+                    </div>
+                    <div id="function-errors" class="mt-8 text-xs text-error"></div>
+                    <div id="function-preview" class="mt-12" style="display:none;">
+                        <h3>Function Preview</h3>
+                        <canvas id="function-canvas" width="400" height="200" style="border: 1px solid var(--border-color); border-radius: 8px;"></canvas>
+                        <div class="mt-8">
+                            <button type="button" id="save-function-btn" class="btn" disabled>Save Function</button>
+                        </div>
+                    </div>
+                </div>
+            </details>
+
+            <div class="content-section">
+                <h2>Current Function</h2>
+                <div id="current-function-display" class="card" style="padding: 16px;">
+                    <div id="no-function-message" style="text-align: center; color: var(--muted-color);">
+                        No function currently defined.
+                    </div>
+                    <div id="function-info" style="display: none;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong>Function:</strong> <code id="current-function-expr"></code>
+                            </div>
+                            <button type="button" id="clear-function-btn" class="btn btn-danger">Clear Function</button>
+                        </div>
+                        <div class="mt-8">
+                            <canvas id="current-function-canvas" width="400" height="200" style="border: 1px solid var(--border-color); border-radius: 8px;"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const API_BASE_URL = window.location.origin;
+        const expMatch = window.location.pathname.match(/\/exp\/([^\/]+)/);
+        const expPrefix = expMatch ? `/exp/${expMatch[1]}` : '';
+
+        const notificationContainer = document.getElementById('notification-container');
+        const functionExpressionInput = document.getElementById('function-expression');
+        const validateBtn = document.getElementById('validate-btn');
+        const saveFunctionBtn = document.getElementById('save-function-btn');
+        const clearFunctionBtn = document.getElementById('clear-function-btn');
+        const functionErrors = document.getElementById('function-errors');
+        const functionPreview = document.getElementById('function-preview');
+        const functionCanvas = document.getElementById('function-canvas');
+        const currentFunctionCanvas = document.getElementById('current-function-canvas');
+        const noFunctionMessage = document.getElementById('no-function-message');
+        const functionInfo = document.getElementById('function-info');
+        const currentFunctionExpr = document.getElementById('current-function-expr');
+
+        const getApiUrl = (path) => `${API_BASE_URL}${path}`;
+        let ACTIVE_NAME = null;
+        let IS_ADMIN = false;
+        let currentFunction = null;
+
+        async function refreshActive(){
+            try{ 
+                const r = await fetch(`${API_BASE_URL}/api/active-experiment`); 
+                const d = await r.json(); 
+                ACTIVE_NAME = d.active || null; 
+                document.getElementById('active-badge').textContent = `Active: ${ACTIVE_NAME || 'none'}`; 
+            } catch{ 
+                ACTIVE_NAME = null; 
+                document.getElementById('active-badge').textContent = 'Active: ?'; 
+            }
+        }
+
+        // Show/hide admin sections based on auth
+        async function checkAdmin() {
+            try {
+                const resp = await fetch(getApiUrl('/admin/ping'), { credentials: 'include' });
+                IS_ADMIN = resp.ok;
+            } catch (_) { IS_ADMIN = false; }
+            
+            if (!IS_ADMIN) {
+                window.location.href = 'login.html';
+                return;
+            }
+            
+            document.querySelectorAll('.collapsible').forEach(el => el.style.display = IS_ADMIN ? '' : 'none');
+        }
+
+        // Inline status banner helpers
+        const statusBanner = document.getElementById('status-banner');
+        function setBanner(text, type){
+            if (!statusBanner) return;
+            statusBanner.textContent = text;
+            statusBanner.className = `notification-message ${type}`;
+            statusBanner.style.display = 'block';
+        }
+        function clearBanner(){ if(statusBanner){ statusBanner.style.display='none'; statusBanner.textContent=''; } }
+        function updateBanner(){
+            if (!IS_ADMIN){ setBanner('Login required to configure functions. Click Login on the dashboard.', 'error'); return; }
+            if (!ACTIVE_NAME){ setBanner('No active experiment. Open the landing page and Launch one.', 'warning'); return; }
+            clearBanner();
+        }
+
+        const showMessage = (message, type) => {
+            const msgElement = document.createElement('div');
+            msgElement.classList.add('notification-message', type);
+            msgElement.textContent = message;
+            notificationContainer.appendChild(msgElement);
+            setTimeout(() => { msgElement.style.opacity = '0'; setTimeout(() => { msgElement.remove(); }, 300); }, 4000);
+        };
+
+        function showFunctionError(msg) { 
+            functionErrors.textContent = msg; 
+            functionPreview.style.display = 'none';
+            saveFunctionBtn.disabled = true;
+        }
+        
+        function clearFunctionMessages() { 
+            functionErrors.textContent = ''; 
+        }
+
+        function validateFunction(expr) {
+            try {
+                // Create a safe evaluation function
+                const safeEval = (expression, xValue) => {
+                    // Replace x with the actual value
+                    let evalExpr = expression.replace(/\bx\b/g, `(${xValue})`);
+                    
+                    // Create a safe evaluation context with Math functions
+                    const context = {
+                        Math: Math,
+                        sin: Math.sin,
+                        cos: Math.cos,
+                        tan: Math.tan,
+                        exp: Math.exp,
+                        log: Math.log,
+                        sqrt: Math.sqrt,
+                        abs: Math.abs,
+                        pow: Math.pow,
+                        PI: Math.PI,
+                        E: Math.E
+                    };
+                    
+                    // Use Function constructor for safer evaluation
+                    const func = new Function(...Object.keys(context), `return ${evalExpr}`);
+                    return func(...Object.values(context));
+                };
+                
+                // Test the function at several points
+                const testPoints = [-1, -0.5, 0, 0.5, 1];
+                for (const x of testPoints) {
+                    const result = safeEval(expr, x);
+                    if (typeof result !== 'number' || isNaN(result) || !isFinite(result)) {
+                        throw new Error(`Function returns invalid value at x=${x}: ${result}`);
+                    }
+                    if (result <= 0) {
+                        throw new Error(`Function must be positive over [-1, 1]. Got ${result.toFixed(4)} at x=${x}`);
+                    }
+                }
+                return true;
+            } catch (error) {
+                throw new Error(`Invalid function: ${error.message}`);
+            }
+        }
+
+        function plotFunction(canvas, expr) {
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+            
+            ctx.clearRect(0, 0, width, height);
+            
+            // Set up coordinate system
+            const padding = 40;
+            const plotWidth = width - 2 * padding;
+            const plotHeight = height - 2 * padding;
+            
+            // Safe evaluation function (same as in validateFunction)
+            const safeEval = (expression, xValue) => {
+                let evalExpr = expression.replace(/\bx\b/g, `(${xValue})`);
+                const context = {
+                    Math: Math,
+                    sin: Math.sin,
+                    cos: Math.cos,
+                    tan: Math.tan,
+                    exp: Math.exp,
+                    log: Math.log,
+                    sqrt: Math.sqrt,
+                    abs: Math.abs,
+                    pow: Math.pow,
+                    PI: Math.PI,
+                    E: Math.E
+                };
+                const func = new Function(...Object.keys(context), `return ${evalExpr}`);
+                return func(...Object.values(context));
+            };
+            
+            // Calculate function values
+            const points = [];
+            const numPoints = 200;
+            let maxY = 0;
+            
+            for (let i = 0; i <= numPoints; i++) {
+                const x = -1 + (2 * i) / numPoints;
+                try {
+                    const y = safeEval(expr, x);
+                    points.push({ x, y });
+                    maxY = Math.max(maxY, y);
+                } catch (error) {
+                    points.push({ x, y: 0 });
+                }
+            }
+            
+            // Draw axes
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            // X-axis
+            ctx.moveTo(padding, height - padding);
+            ctx.lineTo(width - padding, height - padding);
+            // Y-axis
+            ctx.moveTo(padding, padding);
+            ctx.lineTo(padding, height - padding);
+            ctx.stroke();
+            
+            // Draw function
+            ctx.strokeStyle = '#22d3ee';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            
+            for (let i = 0; i < points.length; i++) {
+                const screenX = padding + ((points[i].x + 1) / 2) * plotWidth;
+                const screenY = height - padding - (points[i].y / maxY) * plotHeight;
+                
+                if (i === 0) {
+                    ctx.moveTo(screenX, screenY);
+                } else {
+                    ctx.lineTo(screenX, screenY);
+                }
+            }
+            ctx.stroke();
+            
+            // Add labels
+            ctx.fillStyle = '#ccc';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('-1', padding, height - padding + 15);
+            ctx.fillText('1', width - padding, height - padding + 15);
+            ctx.fillText('0', padding + plotWidth / 2, height - padding + 15);
+            
+            ctx.textAlign = 'right';
+            ctx.fillText('0', padding - 5, height - padding + 3);
+            ctx.fillText(maxY.toFixed(2), padding - 5, padding + 3);
+        }
+
+        async function loadCurrentFunction() {
+            try {
+                // For now, store in localStorage. In a real implementation, this would be stored server-side
+                const stored = localStorage.getItem('monte-carlo-function');
+                if (stored) {
+                    currentFunction = JSON.parse(stored);
+                    displayCurrentFunction();
+                } else {
+                    displayNoFunction();
+                }
+            } catch (error) {
+                console.error('Error loading current function:', error);
+                displayNoFunction();
+            }
+        }
+
+        function displayCurrentFunction() {
+            if (currentFunction) {
+                noFunctionMessage.style.display = 'none';
+                functionInfo.style.display = 'block';
+                currentFunctionExpr.textContent = currentFunction.expression;
+                plotFunction(currentFunctionCanvas, currentFunction.expression);
+            } else {
+                displayNoFunction();
+            }
+        }
+
+        function displayNoFunction() {
+            noFunctionMessage.style.display = 'block';
+            functionInfo.style.display = 'none';
+        }
+
+        validateBtn.addEventListener('click', () => {
+            clearFunctionMessages();
+            const expr = functionExpressionInput.value.trim();
+            
+            if (!expr) {
+                showFunctionError('Please enter a function expression.');
+                return;
+            }
+            
+            try {
+                validateFunction(expr);
+                plotFunction(functionCanvas, expr);
+                functionPreview.style.display = 'block';
+                saveFunctionBtn.disabled = false;
+                showMessage('Function validated successfully!', 'success');
+            } catch (error) {
+                showFunctionError(error.message);
+            }
+        });
+
+        saveFunctionBtn.addEventListener('click', () => {
+            const expr = functionExpressionInput.value.trim();
+            try {
+                validateFunction(expr);
+                currentFunction = {
+                    expression: expr,
+                    timestamp: new Date().toISOString()
+                };
+                localStorage.setItem('monte-carlo-function', JSON.stringify(currentFunction));
+                displayCurrentFunction();
+                functionExpressionInput.value = '';
+                functionPreview.style.display = 'none';
+                saveFunctionBtn.disabled = true;
+                showMessage('Function saved successfully!', 'success');
+            } catch (error) {
+                showMessage(`Error saving function: ${error.message}`, 'error');
+            }
+        });
+
+        clearFunctionBtn.addEventListener('click', () => {
+            if (confirm('Are you sure you want to clear the current function? This action cannot be undone.')) {
+                currentFunction = null;
+                localStorage.removeItem('monte-carlo-function');
+                displayNoFunction();
+                showMessage('Function cleared.', 'warning');
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', async () => { 
+            await refreshActive(); 
+            await checkAdmin(); 
+            updateBanner(); 
+            await loadCurrentFunction();
+        });
+    </script>
+    <script src="scripts/theme.js"></script>
+
+</body>
+</html>

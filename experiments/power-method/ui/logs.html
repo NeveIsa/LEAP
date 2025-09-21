@@ -126,9 +126,35 @@
 
     function formatValue(val) {
       if (val === null || val === undefined) return 'null';
-      if (typeof val === 'string') return val.length > 50 ? val.substring(0, 50) + '…' : val;
-      if (Array.isArray(val)) return `[${val.length} items]`;
+      if (typeof val === 'string') {
+        // Try to parse as JSON first (for JSON-encoded arrays/objects)
+        try {
+          const parsed = JSON.parse(val);
+          return formatValue(parsed);
+        } catch (e) {
+          // Not JSON, treat as regular string
+          return val.length > 50 ? val.substring(0, 50) + '…' : val;
+        }
+      }
+      if (Array.isArray(val)) {
+        // Check if it's a numerical vector/array
+        if (val.every(item => typeof item === 'number')) {
+          // Format as a proper vector with reasonable precision
+          const formatted = val.map(num => 
+            Math.abs(num) < 1e-10 ? '0.000' : 
+            num.toFixed(3)
+          ).join(', ');
+          return `[${formatted}]`;
+        } else {
+          // Mixed types or non-numeric, show generic format
+          return `[${val.length} items]`;
+        }
+      }
       if (typeof val === 'object') return '{' + Object.keys(val).length + ' keys}';
+      if (typeof val === 'number') {
+        // Format numbers with reasonable precision
+        return Math.abs(val) < 1e-10 ? '0.000' : val.toFixed(6);
+      }
       return String(val);
     }
 

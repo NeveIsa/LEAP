@@ -164,7 +164,7 @@ plt.plot(x_range, f(x_range), 'b-', label='f(x) = (x-10)(x-30)')
 # Plot student results
 if log_xs:
     bsearch = np.array(log_xs)
-    alphas = np.linspace(0.3, 1, len(bsearch))
+    alphas = np.linspace(1, 0.3, len(bsearch))
     colors = [(1, 0, 0, a) for a in alphas]
     
     sns.scatterplot(x=bsearch, y=f(bsearch), marker="o", color=colors, label="root approximations")
