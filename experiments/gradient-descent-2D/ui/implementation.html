@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Depth-First Search Implementation</title>
+    <title>Gradient Descent 2D Implementation</title>
     <link rel="stylesheet" href="style/main.css" />
     <script src="https://cdn.jsdelivr.net/npm/@marimo-team/marimo-snippets@1"></script>
     <style>
@@ -43,20 +43,68 @@
 <body class="page-centered">
     <div class="container">
         <div class="header">
-            <h1 style="margin:0; color: #e0e0e0;">Depth-First Search</h1>
+            <h1 style="margin:0; color: #e0e0e0;">Gradient Descent 2D</h1>
             <a href="dashboard.html" class="back-btn">Back to Dashboard</a>
         </div>
 
         <div class="notebook-section">
-            <h2 class="notebook-title">Depth-First Search Implementation</h2>
+            <h2 class="notebook-title">Student Implementation</h2>
             <marimo-iframe data-theme="dark" data-height="600px">
                 <pre><code class="language-python">import marimo as mo
-import requests as req
 import numpy as np</code></pre>
 
-                <pre><code class="language-python"># Setup for Depth-First Search
+                <pre><code class="language-python">mo.vstack([method_input, student_id_input])</code></pre>
+
+                <pre><code class="language-python"># Simple Gradient Descent Implementation
+def gradientdescent(df, x0, gamma=1e-3, N=300):
+    """
+    Simple gradient descent implementation.
+    
+    Parameters:
+    - df: gradient function (should return tuple of partial derivatives)
+    - x0: starting point as array [x, y]
+    - gamma: learning rate (step size)
+    - N: number of iterations
+    
+    Returns:
+    - xs: array of all points visited during optimization
+    """
+    xs = [x0]
+    
+    x = x0
+    for i in range(N):
+        x = x - gamma * np.array(df(*x))
+        xs.append(x)
+    
+    return np.array(xs)
+
+# Run gradient descent from a starting point
+x0 = np.array([10.0, 5.0])  # Starting point
+path = gradientdescent(client.df, x0, gamma=1e-3, N=300)
+final = path[-1]
+
+# Evaluate final function value
+final_value = client.f(*final)
+
+print(f"Gradient Descent Results:")
+print(f"Starting point: ({x0[0]:.1f}, {x0[1]:.1f})")
+print(f"Final point: ({final[0]:.4f}, {final[1]:.4f})")
+print(f"Final function value: {final_value:.6f}")
+print(f"Number of iterations: {len(path)}")
+print(f"Learning rate (gamma): 1e-3")
+
+# Return results
+{
+    "path": path.tolist(),
+    "final_point": final.tolist(),
+    "final_value": final_value,
+    "num_iterations": len(path),
+    "learning_rate": 1e-3
+}</code></pre>
+
+                <pre><code class="language-python"># Initialize server URL and user inputs
 SERVER_URL = "http://localhost:9000"
-EXPERIMENT_NAME = "depth-first-search"
+EXPERIMENT_NAME = None  # Auto-detect active experiment
 
 student_id_input = mo.ui.text(
     value="",
@@ -64,107 +112,19 @@ student_id_input = mo.ui.text(
     label="Student ID:"
 )
 
-trial_input = mo.ui.text(
-    value="",
-    placeholder="Enter trial name (e.g., dfs-demo)",
+method_input = mo.ui.text(
+    value="gradient-descent-demo",
+    placeholder="Enter trial name (e.g., gradient-descent-demo)",
     label="Trial Name:"
-)
-
-mo.vstack([student_id_input, trial_input])</code></pre>
-
-                <pre><code class="language-python"># Simple Depth-First Search Implementation
-def depth_first_search():
-    """Simple DFS that logs neighbor calls for visualization."""
-    # Get starting position
-    start_pos = client.start()
-    print(f"Starting DFS from: {start_pos}")
-    
-    # Convert to tuple if needed (RPC might return lists)
-    if isinstance(start_pos, list):
-        start_pos = tuple(start_pos)
-    
-    # Initialize data structures
-    visited = set()
-    stack = [start_pos]
-    path = []
-    
-    while stack:
-        current = stack.pop()
-        
-        # Convert to tuple if needed
-        if isinstance(current, list):
-            current = tuple(current)
-        
-        if current in visited:
-            continue
-            
-        visited.add(current)
-        path.append(current)
-        print(f"Visiting: {current}")
-        
-        # Get neighbors - THIS CALL GETS LOGGED FOR VISUALIZATION
-        x, y = current
-        neighbors = client.neighbor(x, y)  # This logs the call
-        print(f"  Neighbors: {neighbors}")
-        
-        # Add unvisited neighbors to stack (convert each to tuple)
-        for neighbor in reversed(neighbors):  # reversed for consistent order
-            # Convert to tuple if needed (RPC might return lists)
-            if isinstance(neighbor, list):
-                neighbor = tuple(neighbor)
-            if neighbor not in visited:
-                stack.append(neighbor)
-    
-    return visited, path
-
-# Check available functions first
-print("Available functions:", list(client._function_cache.keys()) if hasattr(client, '_function_cache') else "Unknown")
-
-# Run the implementation
-visited_nodes, traversal_path = depth_first_search()
-print(f"\nCompleted! Visited {len(visited_nodes)} nodes")
-print(f"Path: {traversal_path}")</code></pre>
+)</code></pre>
 
                 <pre><code class="language-python"># Initialize client with user inputs
 client = RPCClient(
     server_url=SERVER_URL, 
-    student_id=student_id_input.value or "test-student", 
-    trial_name=trial_input.value or "dfs-demo", 
+    student_id=student_id_input.value, 
+    trial_name=method_input.value, 
     experiment_name=EXPERIMENT_NAME
-)
-
-print(f"Connected as: {client.student_id}")
-print(f"Trial: {client.trial_name}")
-print(f"Experiment: {client.experiment_name}")
-
-# Debug: Check what functions are discovered
-try:
-    print("Discovered functions:", list(client._function_cache.keys()))
-except Exception as e:
-    print("Error checking functions:", e)</code></pre>
-
-                <pre><code class="language-python"># Test the functions and check types
-print("Testing functions:")
-start_pos = client.start()
-print(f"Start position: {start_pos}")
-print(f"Start position type: {type(start_pos)}")
-
-# Test neighbors at start position
-x, y = start_pos
-neighbors = client.neighbor(x, y)
-print(f"Neighbors of {start_pos}: {neighbors}")
-print(f"Neighbors type: {type(neighbors)}")
-if neighbors:
-    print(f"First neighbor type: {type(neighbors[0])}")
-
-# Test a few more positions
-test_positions = [(2, 2), (4, 4), (0, 4)]
-for pos in test_positions:
-    x, y = pos
-    neighbors = client.neighbor(x, y)
-    print(f"Neighbors of {pos}: {neighbors}")
-    if neighbors:
-        print(f"  First neighbor type: {type(neighbors[0])}")</code></pre>
+)</code></pre>
                 
                 <pre><code class="language-python">import requests
 import json
@@ -323,7 +283,7 @@ class RPCClient:
         
         # Fallback: try calling a simple function
         try:
-            getattr(self, 'f')(0.0, 1.0)  # Try the Euler function
+            getattr(self, 'f')(0.0, 0.0)  # Try the f function
             return True
         except RPCNotRegisteredError:
             return False

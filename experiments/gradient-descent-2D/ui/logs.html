@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Gradient Descent 2D - Logs</title>
+  <link rel="stylesheet" href="style/main.css" />
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Gradient Descent 2D - Logs</h1>
+      <span class="subtle">Last 100 entries</span>
+      <span class="badge" id="active-badge" style="float:right;margin-left:6px">Active: …</span>
+    </header>
+
+    <div class="toolbar" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+      <a href="dashboard.html">← Back to Gradient Descent 2D Dashboard</a>
+      <div style="flex:1"></div>
+      <label for="studentSelect">Student:</label>
+      <select id="studentSelect" class="input">
+        <option value="">All</option>
+      </select>
+      <label for="expSelect">Trial:</label>
+      <select id="expSelect" class="input">
+        <option value="">All</option>
+      </select>
+      <button class="btn" id="filterBtn">Filter</button>
+      <button class="btn" id="refreshBtn">Clear</button>
+      <span class="badge" id="countBadge">Loading…</span>
+      <span class="badge" id="updatedBadge"></span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Student</th>
+            <th>Trial</th>
+            <th>Function</th>
+            <th>Args</th>
+            <th>Result</th>
+            <th>Error</th>
+          </tr>
+        </thead>
+        <tbody id="logBody"></tbody>
+      </table>
+    </div>
+
+    <div class="footer" id="message"></div>
+  </div>
+
+  <script>
+    const API_BASE_URL = window.location.origin;
+    const expMatch = window.location.pathname.match(/\/exp\/([^\/]+)/);
+
+    const logBody = document.getElementById('logBody');
+    const countBadge = document.getElementById('countBadge');
+    const updatedBadge = document.getElementById('updatedBadge');
+    const msg = document.getElementById('message');
+    const studentSelect = document.getElementById('studentSelect');
+    const expSelect = document.getElementById('expSelect');
+    const QS = new URLSearchParams(window.location.search);
+    const QS_SID = QS.get('sid') || QS.get('student_id') || '';
+    const QS_EXP = QS.get('trial') || QS.get('trial_name') || QS.get('exp') || QS.get('experiment_name') || '';
+
+    function setMsg(text) { msg.textContent = text || ''; }
+
+    async function fetchLogs(studentId, experimentNameFilter) {
+      try {
+        const params = new URLSearchParams({ n: 100, order: 'latest' });
+        if (studentId) params.set('student_id', studentId);
+        if (experimentNameFilter) params.set('trial', experimentNameFilter);
+        const res = await fetch(`${API_BASE_URL}/logs?${params.toString()}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        return data.logs || [];
+      } catch (e) {
+        console.error('Fetch logs failed', e);
+        if (String(e).includes('HTTP 409')) {
+          setMsg('No active experiment. Start one from the landing page.');
+        } else {
+          setMsg('Failed to fetch logs. Is the server running?');
+        }
+        return [];
+      }
+    }
+
+    function uniqueSorted(arr) {
+      return Array.from(new Set(arr.filter(Boolean))).sort((a,b) => a < b ? -1 : a > b ? 1 : 0);
+    }
+
+    function populateSelect(sel, values) {
+      sel.innerHTML = '';
+      const optAll = document.createElement('option');
+      optAll.value = '';
+      optAll.textContent = 'All';
+      sel.appendChild(optAll);
+      for (const v of values) {
+        const opt = document.createElement('option');
+        opt.value = v;
+        opt.textContent = v;
+        sel.appendChild(opt);
+      }
+    }
+
+    async function loadOptions() {
+      try {
+        const res = await fetch(`${API_BASE_URL}/log-options`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const students = uniqueSorted([...(data.students || []), ...(data.student_ids || [])]);
+        const trials = uniqueSorted([...(data.trials || []), ...(data.experiments || [])]);
+        populateSelect(studentSelect, students);
+        populateSelect(expSelect, trials);
+        if (QS_SID && students.includes(QS_SID)) studentSelect.value = QS_SID;
+        if (QS_EXP && trials.includes(QS_EXP)) expSelect.value = QS_EXP;
+      } catch (e) {
+        console.error('Load options failed', e);
+      }
+    }
+
+    function formatValue(val) {
+      if (val === null || val === undefined) return 'null';
+      if (typeof val === 'string') {
+        // Try to parse as JSON first (for JSON-encoded arrays/objects)
+        try {
+          const parsed = JSON.parse(val);
+          return formatValue(parsed);
+        } catch (e) {
+          // Not JSON, treat as regular string
+          return val.length > 50 ? val.substring(0, 50) + '…' : val;
+        }
+      }
+      if (Array.isArray(val)) {
+        // Check if it's a numerical vector/array
+        if (val.every(item => typeof item === 'number')) {
+          // Format as a proper vector with reasonable precision
+          const formatted = val.map(num => 
+            Math.abs(num) < 1e-10 ? '0.000' : 
+            num.toFixed(3)
+          ).join(', ');
+          return `[${formatted}]`;
+        } else {
+          // Mixed types or non-numeric, show generic format
+          return `[${val.length} items]`;
+        }
+      }
+      if (typeof val === 'object') return '{' + Object.keys(val).length + ' keys}';
+      if (typeof val === 'number') {
+        // Format numbers with reasonable precision
+        return Math.abs(val) < 1e-10 ? '0.000' : val.toFixed(6);
+      }
+      return String(val);
+    }
+
+    function renderLogs(logs) {
+      logBody.innerHTML = '';
+      countBadge.textContent = `${logs.length} logs`;
+      updatedBadge.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+      if (logs.length === 0) {
+        const row = document.createElement('tr');
+        row.innerHTML = '<td colspan="7" style="text-align:center;">No logs found.</td>';
+        logBody.appendChild(row);
+        return;
+      }
+      for (const log of logs) {
+        const row = document.createElement('tr');
+        const time = new Date(log.ts || '').toLocaleString();
+        const student = log.student_id || 'N/A';
+        const trial = log.trial || log.experiment || 'N/A';
+        const func = log.func_name || 'N/A';
+        const args = formatValue(log.args_json);
+        const result = formatValue(log.result_json);
+        const error = log.error || '';
+        row.innerHTML = `
+          <td class="min">${time}</td>
+          <td class="min">${student}</td>
+          <td class="min">${trial}</td>
+          <td class="code">${func}</td>
+          <td class="code">${args}</td>
+          <td class="code">${result}</td>
+          <td class="code text-error">${error}</td>
+        `;
+        logBody.appendChild(row);
+      }
+    }
+
+    async function refreshLogs() {
+      const studentId = studentSelect.value || '';
+      const experimentNameFilter = expSelect.value || '';
+      const logs = await fetchLogs(studentId, experimentNameFilter);
+      renderLogs(logs);
+    }
+
+    async function refreshActive() {
+      try {
+        const r = await fetch(`${API_BASE_URL}/api/active-experiment`);
+        const d = await r.json();
+        document.getElementById('active-badge').textContent = `Active: ${d.active || 'none'}`;
+      } catch {
+        document.getElementById('active-badge').textContent = 'Active: ?';
+      }
+    }
+
+    document.getElementById('filterBtn').addEventListener('click', refreshLogs);
+    document.getElementById('refreshBtn').addEventListener('click', () => {
+      studentSelect.value = '';
+      expSelect.value = '';
+      refreshLogs();
+    });
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      await refreshActive();
+      await loadOptions();
+      await refreshLogs();
+      setInterval(refreshActive, 5000);
+    });
+  </script>
+  <script src="scripts/theme.js"></script>
+</body>
+</html>
