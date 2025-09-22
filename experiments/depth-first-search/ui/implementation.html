@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Depth-First Search Implementation</title>
+    <link rel="stylesheet" href="style/main.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@marimo-team/marimo-snippets@1"></script>
+    <style>
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        .back-btn {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .back-btn:hover {
+            background: #545b62;
+        }
+        .notebook-section {
+            margin-bottom: 40px;
+        }
+        .notebook-title {
+            color: #e0e0e0;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+    </style>
+</head>
+<body class="page-centered">
+    <div class="container">
+        <div class="header">
+            <h1 style="margin:0; color: #e0e0e0;">Depth-First Search</h1>
+            <a href="dashboard.html" class="back-btn">Back to Dashboard</a>
+        </div>
+
+        <div class="notebook-section">
+            <h2 class="notebook-title">Depth-First Search Implementation</h2>
+            <marimo-iframe data-theme="dark" data-height="600px">
+                <pre><code class="language-python">import marimo as mo
+import requests as req
+import numpy as np</code></pre>
+
+                <pre><code class="language-python"># Setup for Depth-First Search
+SERVER_URL = "http://localhost:9000"
+EXPERIMENT_NAME = "depth-first-search"
+
+student_id_input = mo.ui.text(
+    value="",
+    placeholder="Enter your student ID",
+    label="Student ID:"
+)
+
+trial_input = mo.ui.text(
+    value="",
+    placeholder="Enter trial name (e.g., dfs-demo)",
+    label="Trial Name:"
+)
+
+mo.vstack([student_id_input, trial_input])</code></pre>
+
+                <pre><code class="language-python"># Simple Depth-First Search Implementation
+def depth_first_search():
+    """Simple DFS that logs neighbor calls for visualization."""
+    # Get starting position
+    start_pos = client.start()
+    print(f"Starting DFS from: {start_pos}")
+    
+    # Convert to tuple if needed (RPC might return lists)
+    if isinstance(start_pos, list):
+        start_pos = tuple(start_pos)
+    
+    # Initialize data structures
+    visited = set()
+    stack = [start_pos]
+    path = []
+    
+    while stack:
+        current = stack.pop()
+        
+        # Convert to tuple if needed
+        if isinstance(current, list):
+            current = tuple(current)
+        
+        if current in visited:
+            continue
+            
+        visited.add(current)
+        path.append(current)
+        print(f"Visiting: {current}")
+        
+        # Get neighbors - THIS CALL GETS LOGGED FOR VISUALIZATION
+        x, y = current
+        neighbors = client.neighbor(x, y)  # This logs the call
+        print(f"  Neighbors: {neighbors}")
+        
+        # Add unvisited neighbors to stack (convert each to tuple)
+        for neighbor in reversed(neighbors):  # reversed for consistent order
+            # Convert to tuple if needed (RPC might return lists)
+            if isinstance(neighbor, list):
+                neighbor = tuple(neighbor)
+            if neighbor not in visited:
+                stack.append(neighbor)
+    
+    return visited, path
+
+# Run the implementation
+visited_nodes, traversal_path = depth_first_search()
+print(f"\nCompleted! Visited {len(visited_nodes)} nodes")
+print(f"Path: {traversal_path}")</code></pre>
+
+                <pre><code class="language-python"># Initialize client with user inputs
+client = RPCClient(
+    server_url=SERVER_URL, 
+    student_id=student_id_input.value or "test-student", 
+    trial_name=trial_input.value or "dfs-demo", 
+    experiment_name=EXPERIMENT_NAME
+)
+
+print(f"Connected as: {client.student_id}")
+print(f"Trial: {client.trial_name}")
+print(f"Experiment: {client.experiment_name}")</code></pre>
+
+                <pre><code class="language-python"># Test the functions and check types
+print("Testing functions:")
+start_pos = client.start()
+print(f"Start position: {start_pos}")
+print(f"Start position type: {type(start_pos)}")
+
+# Test neighbors at start position
+x, y = start_pos
+neighbors = client.neighbor(x, y)
+print(f"Neighbors of {start_pos}: {neighbors}")
+print(f"Neighbors type: {type(neighbors)}")
+if neighbors:
+    print(f"First neighbor type: {type(neighbors[0])}")
+
+# Test a few more positions
+test_positions = [(2, 2), (4, 4), (0, 4)]
+for pos in test_positions:
+    x, y = pos
+    neighbors = client.neighbor(x, y)
+    print(f"Neighbors of {pos}: {neighbors}")
+    if neighbors:
+        print(f"  First neighbor type: {type(neighbors[0])}")</code></pre>
+                
+                <pre><code class="language-python">import requests
+import json
+import os
+
+class RPCError(Exception):
+    """Base exception for RPC client errors."""
+
+class RPCServerError(RPCError):
+    """Raised when the server returns a non-2xx response with an error."""
+
+class RPCNetworkError(RPCError):
+    """Raised when there is a network/transport error reaching the server."""
+
+class RPCProtocolError(RPCError):
+    """Raised when the server responds successfully but the payload is invalid."""
+
+class RPCNotRegisteredError(RPCServerError):
+    """Raised when the server indicates the student_id is not registered (HTTP 403)."""
+
+class RPCClient:
+    """A client for the Classroom RPC Server."""
+
+    def __init__(self, server_url: str, student_id: str, trial_name: str | None = None, experiment_name: str | None = None):
+        """Initializes the client with the server URL, student ID, optional trial name, and experiment name."""
+        self.server_url = server_url.rstrip('/')
+        self.student_id = student_id
+        self.trial_name = trial_name
+        self.experiment_name = experiment_name or self._detect_active_experiment()
+        self._function_cache = {}
+        self._discover_functions()
+
+    def _detect_active_experiment(self) -> str | None:
+        try:
+            resp = requests.get(f"{self.server_url}/api/active-experiment", timeout=5)
+            if resp.ok:
+                data = resp.json()
+                return data.get("active")
+        except Exception:
+            pass
+        return os.environ.get('DEFAULT_EXPERIMENT')
+
+    def _discover_functions(self):
+        """Fetches the list of available functions from the server."""
+        try:
+            response = requests.get(f"{self.server_url}/functions", timeout=10)
+            response.raise_for_status()
+            self._function_cache = response.json()
+        except requests.exceptions.RequestException as e:
+            raise RPCNetworkError(f"Error discovering functions: {e}") from e
+
+    def __getattr__(self, name: str):
+        """Dynamically creates a method to call a remote function if it exists."""
+        if name in self._function_cache:
+            func_info = self._function_cache[name]
+
+            def rpc_method(*args, **kwargs):
+                if kwargs:
+                    raise TypeError(f"Remote function '{name}' does not support keyword arguments.")
+
+                payload = {
+                    "student_id": self.student_id,
+                    "func_name": name,
+                    "args": args,
+                    "trial": self.trial_name,
+                    "experiment_name": self.experiment_name,
+                }
+                try:
+                    response = requests.post(f"{self.server_url}/call", json=payload, timeout=15)
+                except requests.exceptions.RequestException as e:
+                    raise RPCNetworkError(f"Network error calling '{name}': {e}") from e
+
+                if not response.ok:
+                    status = response.status_code
+                    server_detail = None
+                    try:
+                        server_json = response.json()
+                        server_detail = server_json.get("detail")
+                    except Exception:
+                        server_detail = response.text or response.reason
+
+                    if status == 403:
+                        raise RPCNotRegisteredError(
+                            f"Forbidden: student_id '{self.student_id}' is not registered. "
+                            "Please add the student via the Admin UI."
+                        )
+                    if status == 404 and (server_detail or '').lower().startswith("function"):
+                        raise RPCServerError(f"Function not found: '{name}'.")
+
+                    msg = f"Server error calling '{name}': {server_detail or 'unknown error'} (HTTP {status})"
+                    raise RPCServerError(msg)
+
+                try:
+                    payload = response.json()
+                except json.JSONDecodeError as e:
+                    raise RPCProtocolError(f"Invalid JSON response for '{name}': {e}") from e
+
+                if "result" not in payload:
+                    raise RPCProtocolError(f"Missing 'result' in server response for '{name}'.")
+
+                return payload["result"]
+
+            rpc_method.__doc__ = (
+                f"Dynamically generated method to call the remote function '{name}'.\n\n"
+                f"Original docstring:\n{func_info.get('doc', 'No documentation available.')}\n\n"
+                f"Signature: {func_info.get('signature', 'N/A')}"
+            )
+            rpc_method.__name__ = name
+
+            setattr(self, name, rpc_method)
+            return rpc_method
+        else:
+            raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'. "
+                                    f"No such remote function discovered.")
+
+    def help(self):
+        """Prints a list of available remote functions and their signatures."""
+        if not self._function_cache:
+            print("Could not retrieve function list from the server.")
+            return
+        print("Available remote functions:\n")
+        for name, info in self._function_cache.items():
+            print(f"- {name}{info.get('signature', '()')}\n")
+
+    def fetch_logs(self, n: int = 100, student_id: str | None = None, order: str = "latest"):
+        """Fetch logs from the public logs endpoint."""
+        params = {"n": n, "order": order}
+        if student_id:
+            params["student_id"] = student_id
+        try:
+            resp = requests.get(f"{self.server_url}/logs", params=params, timeout=10)
+        except requests.exceptions.RequestException as e:
+            raise RPCNetworkError(f"Network error fetching logs: {e}") from e
+        if not resp.ok:
+            if resp.status_code == 403:
+                raise RPCNotRegisteredError(
+                    f"Forbidden: student_id '{student_id or self.student_id}' is not registered."
+                )
+            raise RPCServerError(f"Server error fetching logs: HTTP {resp.status_code}")
+        try:
+            data = resp.json()
+        except json.JSONDecodeError as e:
+            raise RPCProtocolError(f"Invalid JSON response from /logs: {e}") from e
+        return data.get("logs", [])
+
+    def is_registered(self) -> bool:
+        """Return True if this client's student_id is registered."""
+        try:
+            resp = requests.get(f"{self.server_url}/is-registered", params={"student_id": self.student_id}, timeout=5)
+            if resp.ok:
+                data = resp.json()
+                if isinstance(data, dict) and "registered" in data:
+                    return bool(data["registered"])
+        except requests.exceptions.RequestException:
+            pass
+        
+        # Fallback: try calling a simple function
+        try:
+            getattr(self, 'f')(0.0, 1.0)  # Try the Euler function
+            return True
+        except RPCNotRegisteredError:
+            return False
+        except Exception:
+            return True
+</code></pre>
+                
+
+
+            </marimo-iframe>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = window.location.origin;
+
+        // Require authentication to view dashboard
+        (async () => {
+            try {
+                const resp = await fetch(`${API_BASE_URL}/admin/ping`, { credentials: 'include' });
+                if (!resp.ok) {
+                    window.location.href = 'login.html';
+                }
+            } catch (e) {
+                window.location.href = 'login.html';
+            }
+        })();
+    </script>
+</body>
+</html>
