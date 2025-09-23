@@ -58,19 +58,19 @@ import numpy as np</code></pre>
 SERVER_URL = "http://localhost:9000"
 EXPERIMENT_NAME = "depth-first-search"
 
-student_id_input = mo.ui.text(
-    value="",
-    placeholder="Enter your student ID",
-    label="Student ID:"
-)
-
 trial_input = mo.ui.text(
     value="",
     placeholder="Enter trial name (e.g., dfs-demo)",
     label="Trial Name:"
 )
 
-mo.vstack([student_id_input, trial_input])</code></pre>
+student_id_input = mo.ui.text(
+    value="",
+    placeholder="Enter your student ID",
+    label="Student ID:"
+)
+
+mo.vstack([trial_input, student_id_input])</code></pre>
 
                 <pre><code class="language-python"># Simple Depth-First Search Implementation
 def depth_first_search():

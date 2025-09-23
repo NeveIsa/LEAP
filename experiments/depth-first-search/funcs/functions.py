@@ -15,8 +15,8 @@ def neighbor(x, y):
     
     neighbors = []
     
-    # Possible moves: right, left, down, up
-    moves = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+    # Possible moves reordered to prioritize vertical movement: down, up, right, left
+    moves = [(0, 1), (0, -1), (1, 0), (-1, 0)]
     
     for dx, dy in moves:
         new_x = x + dx
