@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Depth-First Search Implementation</title>
+    <title>Breadth-First Search Implementation</title>
     <link rel="stylesheet" href="style/main.css" />
     <script src="https://cdn.jsdelivr.net/npm/@marimo-team/marimo-snippets@1"></script>
     <style>
@@ -43,24 +43,24 @@
 <body class="page-centered">
     <div class="container">
         <div class="header">
-            <h1 style="margin:0; color: #e0e0e0;">Depth-First Search</h1>
+            <h1 style="margin:0; color: #e0e0e0;">Breadth-First Search</h1>
             <a href="dashboard.html" class="back-btn">Back to Dashboard</a>
         </div>
 
         <div class="notebook-section">
-            <h2 class="notebook-title">Depth-First Search Implementation</h2>
+            <h2 class="notebook-title">Breadth-First Search Implementation</h2>
             <marimo-iframe data-theme="dark" data-height="600px">
                 <pre><code class="language-python">import marimo as mo
 import requests as req
 import numpy as np</code></pre>
 
-                <pre><code class="language-python"># Setup for Depth-First Search
+                <pre><code class="language-python"># Setup for Breadth-First Search
 SERVER_URL = "http://localhost:9000"
-EXPERIMENT_NAME = "depth-first-search"
+EXPERIMENT_NAME = "breadth-first-search"
 
 trial_input = mo.ui.text(
     value="",
-    placeholder="Enter trial name (e.g., dfs-demo)",
+    placeholder="Enter trial name (e.g., bfs-demo)",
     label="Trial Name:"
 )
 
@@ -72,12 +72,12 @@ student_id_input = mo.ui.text(
 
 mo.vstack([trial_input, student_id_input])</code></pre>
 
-                <pre><code class="language-python"># Simple Depth-First Search Implementation
-def depth_first_search():
-    """Simple DFS that logs neighbor calls for visualization."""
+                <pre><code class="language-python"># Simple Breadth-First Search Implementation
+def breadth_first_search():
+    """Simple BFS that logs neighbor calls for visualization."""
     # Get starting position
     start_pos = client.start()
-    print(f"Starting DFS from: {start_pos}")
+    print(f"Starting BFS from: {start_pos}")
     
     # Convert to tuple if needed (RPC might return lists)
     if isinstance(start_pos, list):
@@ -85,11 +85,11 @@ def depth_first_search():
     
     # Initialize data structures
     visited = set()
-    stack = [start_pos]
-    path = []
+    queue = [start_pos]
+    order = []
     
-    while stack:
-        current = stack.pop()
+    while queue:
+        current = queue.pop(0)
         
         # Convert to tuple if needed
         if isinstance(current, list):
@@ -99,7 +99,7 @@ def depth_first_search():
             continue
             
         visited.add(current)
-        path.append(current)
+        order.append(current)
         print(f"Visiting: {current}")
         
         # Get neighbors - THIS CALL GETS LOGGED FOR VISUALIZATION
@@ -107,41 +107,28 @@ def depth_first_search():
         neighbors = client.neighbor(x, y)  # This logs the call
         print(f"  Neighbors: {neighbors}")
         
-        # Add unvisited neighbors to stack (convert each to tuple)
-        for neighbor in neighbors:  # natural order for true DFS
+        # Add unvisited neighbors to queue (convert each to tuple)
+        for neighbor in neighbors:
             # Convert to tuple if needed (RPC might return lists)
             if isinstance(neighbor, list):
                 neighbor = tuple(neighbor)
             if neighbor not in visited:
-                stack.append(neighbor)
+                queue.append(neighbor)
     
-    return visited, path
+    return visited, order
 
 # Check available functions first
 print("Available functions:", list(client._function_cache.keys()) if hasattr(client, '_function_cache') else "Unknown")
 
 # Run the implementation
-visited_nodes, traversal_path = depth_first_search()
+visited_nodes, traversal_path = breadth_first_search()
 print(f"\nCompleted! Visited {len(visited_nodes)} nodes")
 print(f"Path: {traversal_path}")</code></pre>
 
-                <pre><code class="language-python"># Initialize client with user inputs
-client = RPCClient(
-    server_url=SERVER_URL, 
-    student_id=student_id_input.value or "test-student", 
-    trial_name=trial_input.value or "dfs-demo", 
-    experiment_name=EXPERIMENT_NAME
-)
-
-print(f"Connected as: {client.student_id}")
-print(f"Trial: {client.trial_name}")
-print(f"Experiment: {client.experiment_name}")
-
-# Debug: Check what functions are discovered
-try:
-    print("Discovered functions:", list(client._function_cache.keys()))
-except Exception as e:
-    print("Error checking functions:", e)</code></pre>
+                <pre><code class="language-python"># Prepare client configuration from UI (instantiate after class is defined)
+STUDENT_ID = student_id_input.value or "test-student"
+TRIAL_NAME = trial_input.value or "bfs-demo"
+print(f"Configured: student={STUDENT_ID}, trial={TRIAL_NAME}, experiment={EXPERIMENT_NAME}")</code></pre>
 
                 <pre><code class="language-python"># Test the functions and check types
 print("Testing functions:")
@@ -331,7 +318,28 @@ class RPCClient:
             return True
 </code></pre>
                 
+                <pre><code class="language-python"># Now instantiate the client and run BFS
+client = RPCClient(
+    server_url=SERVER_URL,
+    student_id=STUDENT_ID,
+    trial_name=TRIAL_NAME,
+    experiment_name=EXPERIMENT_NAME
+)
 
+print(f"Connected as: {client.student_id}")
+print(f"Trial: {client.trial_name}")
+print(f"Experiment: {client.experiment_name}")
+
+# Debug: Check what functions are discovered
+try:
+    print("Discovered functions:", list(client._function_cache.keys()))
+except Exception as e:
+    print("Error checking functions:", e)
+
+# Run the BFS
+visited_nodes, traversal_path = breadth_first_search()
+print(f"\nCompleted! Visited {len(visited_nodes)} nodes")
+print(f"Path: {traversal_path}")</code></pre>
 
             </marimo-iframe>
         </div>
