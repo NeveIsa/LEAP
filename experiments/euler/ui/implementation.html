@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Root Finding Implementation</title>
+    <title>Euler's Method Implementation</title>
     <link rel="stylesheet" href="style/main.css" />
     <script src="https://cdn.jsdelivr.net/npm/@marimo-team/marimo-snippets@1"></script>
     <style>
@@ -43,7 +43,7 @@
 <body class="page-centered">
     <div class="container">
         <div class="header">
-            <h1 style="margin:0; color: #e0e0e0;">Root Finding</h1>
+            <h1 style="margin:0; color: #e0e0e0;">Euler's Method</h1>
             <a href="dashboard.html" class="back-btn">Back to Dashboard</a>
         </div>
 
@@ -51,42 +51,29 @@
             <h2 class="notebook-title">Student Implementation</h2>
             <marimo-iframe data-theme="dark" data-height="600px">
                 <pre><code class="language-python">import marimo as mo
-import requests as req
-import numpy as np</code></pre>
+import requests as req</code></pre>
 
-                <pre><code class="language-python">mo.vstack([method_input, student_id_input])</code></pre>
+                <pre><code class="language-python">mo.vstack([trial_input, student_id_input])</code></pre>
 
 
                 <pre><code class="language-python">#Write your implementation here
-def bisection(fn, a, b, xtol=1e-6):
-    if fn(a)*fn(b) > 0:
-        return []
+def euler(fn, x0, y0, xmax, h=0.01):
+    xs = [x0]
+    ys = [y0]
 
-    visited = []
+    while xs[-1] <= xmax:
+        m = fn([xs[-1], ys[-1]])  # slope
+        
+        xnew = xs[-1] + h
+        ynew = ys[-1] + m * h
 
-    while abs(a-b) > xtol:
-        mid = (a+b)/2
-        visited.append(mid)
-        fm = fn(mid)             # <-- compute once
+        xs.append(xnew)
+        ys.append(ynew)
 
-        if fm == 0:              # <-- NEW: stop if midpoint is a root
-            return visited
+    return xs, ys
 
-        if fn(a)*fm < 0:
-            b = mid
-            continue
-        else:
-            a = mid
-            continue
-
-    return visited
-
-x = np.random.rand(10)*25 - 10
-f = client.square
-y= np.array([f(val) for val in x])
-a,b = np.random.choice(x[y<0]),np.random.choice(x[y>0])
-
-bisection(client.square, a, b)</code></pre>
+euler(client.f, x0=0, y0=1, xmax=10)
+</code></pre>
 
                 <pre><code class="language-python">#Initialize server URL and user inputs
 SERVER_URL = "http://localhost:9000"
@@ -98,16 +85,17 @@ student_id_input = mo.ui.text(
     label="Student ID:"
 )
 
-method_input = mo.ui.dropdown(
-    options=["Bisection", "Newton Raphson", "Secant"], 
-    label="Choose Root Finding Method"
+trial_input = mo.ui.text(
+    value="",
+    placeholder="Enter trial name",
+    label="Trial:"
 )</code></pre>
 
                 <pre><code class="language-python"># Initialize client with user inputs
 client = RPCClient(
     server_url=SERVER_URL, 
     student_id=student_id_input.value, 
-    trial_name=method_input.value, 
+    trial_name=trial_input.value, 
     experiment_name=EXPERIMENT_NAME
 )</code></pre>
                 

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Euler's Method - Admin Login</title>
+    <link rel="stylesheet" href="style/main.css" />
+</head>
+<body class="page-centered">
+    <div class="login-container">
+        <h1>Euler's Method - Admin Login</h1>
+        <form id="login-form">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" required value="admin">
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" required value="password">
+            </div>
+            <button type="submit" class="btn">Login</button>
+        </form>
+        <div id="message-area" class="message error" style="display: none;"></div>
+    </div>
+
+    <script>
+        const API_BASE_URL = window.location.origin;
+        const loginForm = document.getElementById('login-form');
+        const messageArea = document.getElementById('message-area');
+        const expMatch = window.location.pathname.match(/\/exp\/([^\/]+)/);
+        const expPrefix = '';
+
+        loginForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/admin/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ username, password })
+                });
+
+                if (response.ok) {
+                    window.location.href = 'dashboard.html';
+                } else {
+                    let msg = 'Login failed';
+                    try {
+                        const data = await response.json();
+                        if (data && data.detail !== undefined) {
+                            msg = (typeof data.detail === 'string') ? data.detail : JSON.stringify(data.detail);
+                        }
+                    } catch (_) {
+                        try { msg = await response.text(); } catch {}
+                    }
+                    showMessage(msg || 'Login failed', 'error');
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                showMessage('Network error or server unreachable', 'error');
+            }
+        });
+
+        function showMessage(msg, type) {
+            messageArea.textContent = msg;
+            messageArea.className = `message ${type}`;
+            messageArea.style.display = 'block';
+            setTimeout(() => { messageArea.style.display = 'none'; }, 3000);
+        }
+    </script>
+    <script src="scripts/theme.js"></script>
+</body>
+</html>
