@@ -13,7 +13,7 @@
   <div class="container">
     <header>
       <h1>Power Method - Logs</h1>
-      <span class="subtle">Last 100 entries</span>
+      <span class="subtle">Configurable limit</span>
       <span class="badge" id="active-badge" style="float:right;margin-left:6px">Active: …</span>
     </header>
 
@@ -30,6 +30,8 @@
       </select>
       <button class="btn" id="filterBtn">Filter</button>
       <button class="btn" id="refreshBtn">Clear</button>
+      <label for="limitInput">Limit:</label>
+      <input type="number" id="limitInput" class="input" value="100" min="1" max="10000" style="width:80px">
       <span class="badge" id="countBadge">Loading…</span>
       <span class="badge" id="updatedBadge"></span>
     </div>
@@ -72,7 +74,9 @@
 
     async function fetchLogs(studentId, experimentNameFilter) {
       try {
-        const params = new URLSearchParams({ n: 100, order: 'latest' });
+        const limitInput = document.getElementById('limitInput');
+        const limit = Math.max(1, Math.min(10000, parseInt(limitInput.value) || 100));
+        const params = new URLSearchParams({ n: limit, order: 'latest' });
         if (studentId) params.set('student_id', studentId);
         if (experimentNameFilter) params.set('trial', experimentNameFilter);
         const res = await fetch(`${API_BASE_URL}/logs?${params.toString()}`);
