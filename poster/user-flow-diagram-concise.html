@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>User Interaction Flow - Concise</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f8f9fa;
+            margin: 0;
+            padding: 15px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            font-size: 1.4em;
+            margin-bottom: 20px;
+        }
+        .mermaid {
+            text-align: center;
+            margin: 15px 0;
+        }
+        .caption {
+            text-align: center;
+            font-style: italic;
+            font-size: 0.9em;
+            margin-top: 15px;
+            color: #666;
+        }
+    </style>
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            themeVariables: {
+                primaryColor: '#e3f2fd',
+                primaryTextColor: '#1565c0',
+                primaryBorderColor: '#1976d2',
+                lineColor: '#666',
+                sectionBkColor: '#f5f5f5',
+                altSectionBkColor: '#ffffff',
+                gridColor: '#ddd'
+            }
+        });
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>User Interaction Flow</h1>
+        
+        <div class="mermaid">
+            sequenceDiagram
+                participant I as Instructor
+                participant S as Server
+                participant St as Student
+                participant D as Dashboard
+                
+                Note over I,S: Setup
+                I->>S: Create experiment & functions
+                I->>S: Configure student access
+                
+                Note over St,S: Learning Activities
+                St->>S: Call numerical methods
+                S->>S: Log all interactions
+                
+                loop Algorithm Exploration
+                    St->>S: POST /call {func, args}
+                    S-->>St: Results & feedback
+                end
+                
+                Note over St,S: Assessment
+                St->>S: Submit quiz responses
+                S->>S: Track participation
+                
+                Note over I,D: Analytics
+                I->>D: View real-time progress
+                I->>S: Export interaction data
+                I->>I: Adapt teaching approach
+        </div>
+        
+        <p class="caption">
+            Interactive learning cycle with continuous assessment and adaptive instruction
+        </p>
+    </div>
+</body>
+</html>

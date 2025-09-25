@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>System Architecture - Concise</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f8f9fa;
+            margin: 0;
+            padding: 15px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            font-size: 1.4em;
+            margin-bottom: 20px;
+        }
+        .mermaid {
+            text-align: center;
+            margin: 15px 0;
+        }
+        .caption {
+            text-align: center;
+            font-style: italic;
+            font-size: 0.9em;
+            margin-top: 15px;
+            color: #666;
+        }
+    </style>
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            themeVariables: {
+                primaryColor: '#e3f2fd',
+                primaryTextColor: '#1565c0',
+                primaryBorderColor: '#1976d2',
+                lineColor: '#666',
+                sectionBkColor: '#f5f5f5',
+                altSectionBkColor: '#ffffff',
+                gridColor: '#ddd'
+            }
+        });
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>System Architecture</h1>
+        
+        <div class="mermaid">
+            flowchart TB
+                subgraph clients [Client Layer]
+                    A1[RPCClient Python]
+                    A2[Jupyter Notebooks] 
+                    A3[Quiz Web Interface]
+                end
+                
+                subgraph server [FastAPI Server]
+                    B1["/functions - Discovery"]
+                    B2["/call - Execute & Log"]
+                    B3["/logs - Analytics"]
+                    B4["Admin & Auth"]
+                end
+                
+                subgraph experiments [Experiment Layer]
+                    C1[Numerical Methods<br/>rosenbrock, cubic, square]
+                    C2[Interactive Quizzes<br/>quiz.html, markdown]
+                end
+                
+                subgraph storage [Storage & Analytics]
+                    D1[SQLAlchemy ORM]
+                    D2[DuckDB Files]
+                    D3[Dashboard UI]
+                end
+                
+                A1 --> B2
+                A2 --> B2
+                A3 --> B2
+                
+                B1 --> C1
+                B1 --> C2
+                B2 --> C1
+                B2 --> C2
+                
+                B2 --> D1
+                B3 --> D1
+                D1 --> D2
+                D1 --> D3
+        </div>
+        
+        <p class="caption">
+            Multi-client architecture with isolated experiments, comprehensive logging, and real-time analytics for adaptive teaching
+        </p>
+    </div>
+</body>
+</html>

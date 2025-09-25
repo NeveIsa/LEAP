@@ -53,32 +53,75 @@
         <div class="mermaid">
             sequenceDiagram
                 participant I as Instructor
-                participant S as Server
+                participant S as FastAPI Server
                 participant St as Student
                 participant DB as DuckDB
+                participant UI as Dashboard
                 
-                Note over I,S: Setup Phase
-                I->>S: Upload functions and quizzes
-                S->>DB: Initialize experiment
+                Note over I,S: Course Preparation
+                I->>S: Create experiments/myclass/funcs/functions.py
+                Note right of I: def rosenbrock(x, y):<br/>    return (1-x)**2 + 100*(y-x**2)**2
+                I->>S: Configure admin_credentials.json (PBKDF2)
+                S->>DB: Initialize myclass.duckdb
+                I->>S: Start experiment: POST /api/experiments/myclass/start
                 
-                Note over St,DB: Student Engagement
+                Note over I,UI: Class Session Setup
+                I->>UI: Login to /exp/myclass/ui/dashboard.html
+                I->>UI: Add students via students.html
+                I->>S: Enable student registration
+                
+                Note over St,S: Student Onboarding
+                St->>S: GET /is-registered?student_id=alice
+                S-->>St: Registration status
+                St->>S: python client.py (set STUDENT_ID=alice)
                 St->>S: GET /functions
-                S-->>St: Available methods
+                S-->>St: ['rosenbrock', 'quadratic', 'cubic', 'square']
                 
-                loop Learning Activities
-                    St->>S: POST /call with func and args
-                    S->>DB: Log interaction
-                    S-->>St: Return results
+                Note over St,S: Numerical Methods Exploration
+                loop Algorithm Experimentation
+                    St->>S: POST /call {"func": "rosenbrock", "args": [0.5, 0.3], "trial": "optimization-hw1"}
+                    S->>S: Validate args, execute function
+                    S->>DB: Log {student: "alice", func: "rosenbrock", args: [0.5, 0.3], result: 75.09, timestamp}
+                    S-->>St: {"result": 75.09, "timestamp": "2024-09-25T10:30:45Z"}
+                    St->>St: Analyze result, adjust parameters
                 end
                 
-                Note over St,S: Quiz Participation
-                St->>S: Submit quiz answers
-                S->>DB: Log responses
+                Note over St,UI: Quiz-Based Assessment (QuizLab)
+                St->>UI: Access /exp/quizlab/ui/quiz.html
+                UI->>S: GET /exp/quizlab/files?ext=md&dir=quiz
+                S-->>UI: ["derivatives.md", "optimization-basics.md"]
+                St->>UI: Select "derivatives.md" quiz
+                UI->>UI: Render Markdown with LaTeX: $$\frac{d}{dx}x^2 = ?$$
+                St->>UI: Submit answer: choice_index=1 ("2x")
+                UI->>S: POST /call {"kind": "quiz", "qid": "q1", "choice_index": 1, "quizname": "derivatives"}
+                S->>DB: Log quiz response with metadata
                 
-                Note over I,DB: Analytics
-                I->>S: GET /logs
-                S->>DB: Query interactions
-                S-->>I: Statistics and insights
+                Note over I,UI: Real-time Monitoring
+                I->>UI: View live dashboard
+                I->>S: GET /logs?trial=optimization-hw1&n=50
+                S->>DB: Query recent student interactions
+                DB-->>S: [{student: "alice", func: "rosenbrock", args: [0.5, 0.3]}, ...]
+                S-->>I: Filtered interaction logs
+                I->>UI: View participation heatmap
+                I->>UI: Identify students struggling with convergence
+                
+                Note over I,S: Adaptive Teaching Response
+                alt High Error Rate Detected
+                    I->>I: Notice many students calling rosenbrock with extreme values
+                    I->>S: Add helper function: gradient_hint(x, y)
+                    I->>S: Reload functions via admin panel
+                    I->>St: Announce new helper in class
+                else Strong Engagement Observed
+                    I->>S: Add advanced function: constrained_optimization(x, y, constraint)
+                    I->>UI: Display leaderboard of closest-to-minimum calls
+                end
+                
+                Note over I,DB: Post-Session Analysis
+                I->>S: GET /log-options (get all students and trials)
+                S->>DB: SELECT DISTINCT student_id, trial FROM logs
+                S-->>I: Student engagement summary
+                I->>UI: Export CSV for gradebook integration
+                I->>I: Plan next week's functions based on common misconceptions
         </div>
         
         <p style="text-align: center; font-style: italic; margin-top: 20px;">

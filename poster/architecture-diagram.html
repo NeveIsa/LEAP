@@ -52,44 +52,81 @@
         
         <div class="mermaid">
             graph TB
-                subgraph CL ["Client Layer"]
-                    C1["Python Client"]
-                    C2["Jupyter Notebook"] 
-                    C3["Web Browser"]
-                    C4["CLI/curl"]
+                subgraph CL ["Student Clients"]
+                    C1["Python Client<br/>client.py"]
+                    C2["Jupyter Notebooks<br/>requests + pandas"]
+                    C3["Web Browsers<br/>quiz.html interface"]
+                    C4["Command Line<br/>curl/httpie"]
                 end
                 
-                subgraph FS ["FastAPI Server"]
-                    API["FastAPI Application"]
-                    EP1["/functions"]
-                    EP2["/call"]
-                    EP3["/logs"]
-                    AUTH["Authentication"]
+                subgraph FS ["FastAPI Server (rpc_server.py)"]
+                    API["Main FastAPI App"]
+                    EP1["/functions<br/>List available methods"]
+                    EP2["/call<br/>Execute & log functions"]
+                    EP3["/logs<br/>Query interaction history"]
+                    EP4["/admin/*<br/>Instructor management"]
+                    AUTH["PBKDF2 Authentication<br/>Per-experiment credentials"]
+                    MIDDLEWARE["Security Validation<br/>Argument sanitization"]
                 end
                 
-                subgraph EC ["Experiment Container"]
-                    FUNCS["funcs/ - Functions"]
-                    UI["ui/ - Dashboards"]
-                    QUIZ["quiz/ - Assessments"]
+                subgraph EL ["Experiment Layer"]
+                    EXP1["default/<br/>Numerical Methods"]
+                    EXP2["quizlab/<br/>Interactive Quizzes"]
+                    
+                    subgraph EXP1_PARTS ["Default Experiment"]
+                        FUNC1["square(), cubic(),<br/>rosenbrock(), quadratic()"]
+                        UI1["dashboard.html<br/>logs.html, students.html"]
+                        DB1[("default.duckdb")]
+                    end
+                    
+                    subgraph EXP2_PARTS ["QuizLab Experiment"]
+                        FUNC2["echo(), square()<br/>for logging responses"]
+                        UI2["quiz.html, quiz-stats.html<br/>Markdown quiz rendering"]
+                        DB2[("quizlab.duckdb")]
+                        QUIZ["quiz/*.md<br/>LaTeX + Code support"]
+                    end
                 end
                 
-                subgraph DL ["Data Layer"]
-                    DB[("DuckDB")]
-                    LOGS["Interaction Logs"]
-                    STATS["Analytics"]
+                subgraph DL ["Storage & Analytics"]
+                    STORAGE["SQLAlchemy ORM<br/>storage_orm.py"]
+                    LOGS["Function call logs<br/>args, results, timestamps"]
+                    STATS["Real-time analytics<br/>Student progress tracking"]
+                    EXPORT["CSV Export<br/>Dashboard integration"]
                 end
                 
+                %% Client connections
                 C1 --> API
-                C2 --> API
+                C2 --> API  
                 C3 --> API
                 C4 --> API
+                
+                %% Server routing
                 API --> EP1
                 API --> EP2
                 API --> EP3
-                EP2 --> FUNCS
-                EP2 --> DB
-                DB --> LOGS
+                API --> EP4
+                API --> AUTH
+                API --> MIDDLEWARE
+                
+                %% Experiment routing
+                EP1 --> EXP1
+                EP1 --> EXP2
+                EP2 --> FUNC1
+                EP2 --> FUNC2
+                EP2 --> QUIZ
+                
+                %% Data flow
+                EP2 --> STORAGE
+                STORAGE --> DB1
+                STORAGE --> DB2
+                STORAGE --> LOGS
                 LOGS --> STATS
+                STATS --> EXPORT
+                
+                %% UI connections
+                C3 --> UI1
+                C3 --> UI2
+                UI2 --> QUIZ
         </div>
         
         <p style="text-align: center; font-style: italic; margin-top: 20px;">
