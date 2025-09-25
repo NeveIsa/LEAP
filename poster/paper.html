@@ -1,0 +1,84 @@
+<!DOCTYPE html><script src="https://cdn.jsdelivr.net/npm/texme@1.2.2"></script>
+<style>
+body main{
+    background-color: gainsboro;
+}
+</style>
+<textarea>
+
+# Interactive Classroom RPC for Numerical Methods:
+## A FastAPI + DuckDB Tool for Live Teaching, Logging, and Lightweight Quizzing
+
+### Abstract
+Teaching numerical methods and optimization benefits from *doing*, not just deriving-but in large classes, it is difficult to capture student activity, provide rapid feedback, and keep everyone in sync. We present an **interactive classroom teaching-learning tool** that exposes instructor-defined Python functions over HTTP (FastAPI), lets students call them from any client, and logs every invocation to **DuckDB** for real-time visualization and post-hoc analysis. Instructors package activities as "experiments" with public functions (e.g., bisection, Newton's method, gradient steps) and optional HTML dashboards; students use a minimal client (or curl/colab) to experiment, compare methods, and see algorithm dynamics live. A built-in **LoopLab Quizzes** layer enables Markdown-authored items with LaTeX and code support, seamlessly integrated with the logging framework. We describe the system architecture, authoring workflow, and classroom patterns (live demos, in-lecture polls, exit-tickets). We also outline an evaluation plan using both engagement metrics and pre/post measures. By releasing the tool as open source, we aim to lower adoption barriers and provide instructors with auditable, interactive activities at scale.
+
+---
+
+## 1. Introduction
+Active learning is widely recognized as effective for teaching computational methods, yet traditional classroom setups rely on slides, whiteboards, or isolated notebooks. These approaches limit instructors' ability to capture student activity or to provide timely feedback.
+
+Our project addresses this gap with a lightweight, open-source classroom system that transforms *instructor functions* into live, callable endpoints, while logging every student interaction for monitoring and analysis.
+
+---
+
+## 2. System Design
+**Architecture.** The server is built on **FastAPI** with modular endpoints:
+- `/functions` - list available activities
+- `/call` - invoke instructor-defined functions
+- `/logs`, `/experiments` - metadata and monitoring
+- `/health` - deployment checks
+
+**Experiments.** Each experiment is a self-contained directory:
+- `funcs/`: instructor-exposed Python functions
+- `ui/`: optional dashboards for visualization
+- `quiz.md`: LoopLab quizzes authored in Markdown
+
+**Data Logging.** Every call is logged to **DuckDB**, storing arguments, results, timestamps, and errors. This enables per-student tracking, aggregate analytics, and integration with dashboards.
+
+**Security.** Admin credentials use PBKDF2 hashing, with per-experiment isolation to prevent accidental cross-contamination.
+
+*(Figure 1: System architecture diagram - server < - > client < - > DuckDB < - > UI.)*
+
+---
+
+## 3. Classroom Use
+Instructors prepare experiments for core topics:
+- **Root-finding methods:** Bisection, Newton, Secant
+- **Optimization algorithms:** Gradient descent, proximal updates
+- **Applied problems:** Regression, clustering, resource allocation
+
+Students connect via the client (Python, browser, or CLI) and observe outputs live. Because all calls are logged, instructors can replay activity, surface leaderboards, or identify common errors.
+
+**LoopLab Quizzes.** Quizzes are written in Markdown with support for multiple-choice, LaTeX math, and code blocks. Submissions are stored through the same `/call` API, enabling unified analytics. The quiz interface includes a stats page for quick instructor review.
+
+*(Figure 2: Screenshot of a quiz with LaTeX + code block.)*
+
+---
+
+## 4. Findings and Future Work
+**Pilot use.** In initial small-class deployments, the tool allowed students to:
+- Compare algorithms dynamically (e.g., Newton vs. Bisection)
+- Engage in lightweight polls and quizzes without LMS overhead
+- See immediate visualizations of parameter changes
+
+**Planned evaluation.**
+- Engagement metrics from DuckDB logs (frequency, diversity of calls)
+- Pre/post quizzes for conceptual understanding
+- Instructor usability studies (setup time, integration effort)
+
+**Future directions.**
+- Expand visualization dashboards (contour plots, convergence traces)
+- Add richer analytics for instructors (error clustering, heatmaps)
+- Explore integration with LMS platforms while keeping the tool lightweight
+
+---
+
+## 5. Conclusion
+We introduce an interactive RPC-based classroom framework for teaching numerical methods and optimization. By combining function-level exposure, fine-grained logging, and lightweight quizzes, the tool provides both students and instructors with a richer, auditable learning experience. As an open-source project, it lowers barriers to adopting active-learning practices in computational courses at scale.
+
+---
+
+## References
+- Freeman, S., et al. 2014. *Active learning increases student performance in science, engineering, and mathematics.* PNAS.
+- Repo: https://github.com/NeveIsa/TeachingOptimization
+- [Other optimization/education references to be added in ACM format]
