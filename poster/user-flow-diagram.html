@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>User Interaction Flow Diagram</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .mermaid {
+            text-align: center;
+            margin: 20px 0;
+        }
+    </style>
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            themeVariables: {
+                primaryColor: '#e1f5fe',
+                primaryTextColor: '#0277bd',
+                primaryBorderColor: '#0277bd',
+                lineColor: '#666',
+                sectionBkColor: '#f3f3f3',
+                altSectionBkColor: '#ffffff',
+                gridColor: '#cccccc',
+                secondaryColor: '#f3e5f5',
+                tertiaryColor: '#e8f5e8'
+            }
+        });
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>Figure 2: User Interaction Flow</h1>
+        
+        <div class="mermaid">
+            sequenceDiagram
+                participant I as Instructor
+                participant S as Server
+                participant St as Student
+                participant DB as DuckDB
+                
+                Note over I,S: Setup Phase
+                I->>S: Upload functions and quizzes
+                S->>DB: Initialize experiment
+                
+                Note over St,DB: Student Engagement
+                St->>S: GET /functions
+                S-->>St: Available methods
+                
+                loop Learning Activities
+                    St->>S: POST /call with func and args
+                    S->>DB: Log interaction
+                    S-->>St: Return results
+                end
+                
+                Note over St,S: Quiz Participation
+                St->>S: Submit quiz answers
+                S->>DB: Log responses
+                
+                Note over I,DB: Analytics
+                I->>S: GET /logs
+                S->>DB: Query interactions
+                S-->>I: Statistics and insights
+        </div>
+        
+        <p style="text-align: center; font-style: italic; margin-top: 20px;">
+            Complete user interaction workflow from setup through analytics, showing the flow between instructors, students, and the system.
+        </p>
+    </div>
+</body>
+</html>

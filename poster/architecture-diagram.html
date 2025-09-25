@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>System Architecture Diagram</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .mermaid {
+            text-align: center;
+            margin: 20px 0;
+        }
+    </style>
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            themeVariables: {
+                primaryColor: '#e1f5fe',
+                primaryTextColor: '#0277bd',
+                primaryBorderColor: '#0277bd',
+                lineColor: '#666',
+                sectionBkColor: '#f3f3f3',
+                altSectionBkColor: '#ffffff',
+                gridColor: '#cccccc',
+                secondaryColor: '#f3e5f5',
+                tertiaryColor: '#e8f5e8'
+            }
+        });
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>Figure 1: System Architecture</h1>
+        
+        <div class="mermaid">
+            graph TB
+                subgraph CL ["Client Layer"]
+                    C1["Python Client"]
+                    C2["Jupyter Notebook"] 
+                    C3["Web Browser"]
+                    C4["CLI/curl"]
+                end
+                
+                subgraph FS ["FastAPI Server"]
+                    API["FastAPI Application"]
+                    EP1["/functions"]
+                    EP2["/call"]
+                    EP3["/logs"]
+                    AUTH["Authentication"]
+                end
+                
+                subgraph EC ["Experiment Container"]
+                    FUNCS["funcs/ - Functions"]
+                    UI["ui/ - Dashboards"]
+                    QUIZ["quiz/ - Assessments"]
+                end
+                
+                subgraph DL ["Data Layer"]
+                    DB[("DuckDB")]
+                    LOGS["Interaction Logs"]
+                    STATS["Analytics"]
+                end
+                
+                C1 --> API
+                C2 --> API
+                C3 --> API
+                C4 --> API
+                API --> EP1
+                API --> EP2
+                API --> EP3
+                EP2 --> FUNCS
+                EP2 --> DB
+                DB --> LOGS
+                LOGS --> STATS
+        </div>
+        
+        <p style="text-align: center; font-style: italic; margin-top: 20px;">
+            Distributed client-server model with persistent logging layer showing the complete system architecture.
+        </p>
+    </div>
+</body>
+</html>
