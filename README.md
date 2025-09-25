@@ -28,7 +28,7 @@ Prerequisites: Python 3.10+ recommended
 - Install dependencies: `pip install -r req.txt`
 - Run the server: `make` or `uvicorn server.rpc_server:app --host 0.0.0.0 --port 9000`
 - Open the landing page: `http://localhost:9000/`
-- Click Launch next to an experiment (e.g., `default`) and log in
+- Click Launch next to an experiment (e.g., `default` or `quizlab`) and log in
 - Open the experiment UI from the table (e.g., `/exp/default/ui/dashboard.html`)
 
 Tip: Use `DEFAULT_EXPERIMENT=default` to set which experiment root APIs bind to.
@@ -109,10 +109,10 @@ def cubic(x: float) -> float:
 - Set `STUDENT_ID` and optionally `TRIAL`. Leave `EXPERIMENT_NAME=None` to auto‑detect active, or set explicitly.
 - Run with `python client/client.py`.
 
-## LoopLab Quizzes
+## QuizLab Quizzes
 
 - Authoring
-  - Place quiz Markdown files under `experiments/looplab/ui/` (e.g., `questions.md`, `derivatives.md`).
+  - Place quiz Markdown files under `experiments/<experiment>/ui/quiz/` (e.g., `questions.md`, `derivatives.md`).
   - Question header: `## Question <num>: <id>` (e.g., `## Question 1: q1`).
   - Prompt: first bold line is the question (e.g., `**Derivative of x^2**`).
   - Choices and type:
@@ -123,8 +123,8 @@ def cubic(x: float) -> float:
     - Fenced code blocks (```lang) and inline code
     - LaTeX math via `$...$` and `$$...$$`
 
-- Quiz page: `/exp/looplab/ui/quiz.html`
-  - Auto‑detects quiz files via `GET /exp/<experiment>/quiz-files` (with a local fallback probe).
+- Quiz page: `/exp/quizlab/ui/quiz.html`
+  - Auto‑detects quiz files via `GET /exp/<experiment>/files?ext=md&dir=quiz` (with a local fallback probe).
   - Dropdown to choose the quiz; per‑question submit logs an answer via `/call`.
   - Registration pill checks `GET /is-registered?student_id=...`.
   - Submissions include `quizname` (file name without `.md`).
@@ -132,14 +132,14 @@ def cubic(x: float) -> float:
     - Single: `{ kind:'quiz', type:'single', quizname, qid, question, choice_index, choice_text, ts }`
     - Multi: `{ kind:'quiz', type:'multi', quizname, qid, question, choice_indices:[...], choice_texts:[...], ts }`
 
-- Stats page: `/exp/looplab/ui/quiz-stats.html?quiz=<name>[&trial=<trial>]`
+- Stats page: `/exp/quizlab/ui/quiz-stats.html?quiz=<name>[&trial=<trial>]`
   - Charts‑only per‑question distributions; optional dedupe by latest per student.
   - CSV export; truncation banner when exactly 10,000 logs are returned.
 
 - API additions
-  - `GET /exp/<experiment>/quiz-files` → `{ files: ["questions.md", ...] }`
+  - `GET /exp/<experiment>/files?ext=md&dir=quiz` → `{ files: ["questions.md", ...] }`
 
-- Authoring guide: see `experiments/looplab/ui/QUIZ_AUTHORING.md`
+- Authoring guide: see `experiments/quizlab/ui/QUIZ_AUTHORING.md`
 
 ## Notes & Tips
 
@@ -154,3 +154,27 @@ def cubic(x: float) -> float:
 - SQLAlchemy 2.0, DuckDB (duckdb-engine)
 - Marimo (optional dashboard experiments)
 - Python client via `requests`
+ 
+## Shared UI Templates (Students + Logs)
+
+To avoid duplicating student and log pages across experiments, this repo includes minimal, reusable templates.
+
+- Location: `templates/`
+  - `templates/students.html` – add/list/delete students; clear logs for a student
+  - `templates/logs.html` – view logs with filters (student, trial, order, time window)
+- Styling and theming:
+  - Each experiment can provide an optional theme at `experiments/<exp>/ui/style/theme.css`.
+  - The templates include `<link rel="stylesheet" href="style/theme.css">` so the experiment’s theme is automatically applied when the file is served under the experiment’s UI.
+- Recommended usage (symlink into each experiment):
+
+```
+# Students page
+ln -s ../../../templates/students.html experiments/<exp>/ui/students.html
+# Logs page
+ln -s ../../../templates/logs.html experiments/<exp>/ui/logs.html
+# Optional theme override (create/edit)
+mkdir -p experiments/<exp>/ui/style
+printf "/* custom overrides */\n" > experiments/<exp>/ui/style/theme.css
+```
+
+Open the pages at `/exp/<exp>/ui/students.html` and `/exp/<exp>/ui/logs.html`.

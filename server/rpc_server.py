@@ -218,15 +218,35 @@ def create_experiment_app(experiment_name: str) -> FastAPI:
     ):
         return True
 
-    @app.get("/quiz-files")
-    def list_quiz_markdown_files():
-        """Return list of quiz markdown files located in the experiment's UI directory.
-        The client uses this to auto-populate available quizzes.
+    @app.get("/files")
+    def list_files(ext: Optional[str] = Query(None), dir: Optional[str] = Query(None)):
+        """List files in the experiment's UI directory.
+
+        - Query params:
+          - ext: optional file extension filter (e.g., "md" or ".md").
+          - dir: optional subdirectory under UI (e.g., "quiz"). Single segment only.
         """
-        files = []
+        files: list[str] = []
         try:
-            for name in os.listdir(ui_dir):
-                if name.lower().endswith('.md'):
+            norm_ext = None
+            if ext:
+                norm_ext = ext if ext.startswith(".") else f".{ext}"
+                norm_ext = norm_ext.lower()
+            base_dir = ui_dir
+            if dir:
+                # allow only a safe single-segment directory name to avoid traversal
+                if not re.match(r"^[A-Za-z0-9_-]+$", dir or ""):
+                    return {"files": []}
+                cand = os.path.join(ui_dir, dir)
+                if os.path.isdir(cand):
+                    base_dir = cand
+                else:
+                    return {"files": []}
+            for name in os.listdir(base_dir):
+                if norm_ext:
+                    if name.lower().endswith(norm_ext):
+                        files.append(name)
+                else:
                     files.append(name)
         except Exception:
             pass

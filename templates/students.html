@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Students</title>
+  <link rel="stylesheet" href="style/theme.css">
+  <style>
+    :root { --bg:#0f1221; --panel:#151935; --ink:#e6e9f5; --muted:#9aa3b2; --accent:#77ffd7; --border:#232949; --danger:#ef4444; }
+    * { box-sizing: border-box }
+    html, body { margin:0; padding:0; background: var(--bg); color: var(--ink); font-family: Inter, system-ui, Segoe UI, Roboto, Ubuntu, Cantarell, Arial, sans-serif; }
+    .wrap { max-width: 1000px; margin: 32px auto; padding: 0 16px; }
+    .top { display:flex; align-items:center; gap:12px; margin-bottom: 16px; }
+    .spacer { flex:1 }
+    .badge { display:inline-block; padding:6px 10px; border-radius:999px; background: var(--accent); color:#0b1022; font-weight:700 }
+    .link { color: var(--accent); text-decoration: none }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 14px }
+    .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px }
+    .field { display:flex; flex-direction:column; gap:6px }
+    .label { font-size: 12px; color: var(--muted) }
+    .input { height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border); background: #0e132a; color: var(--ink); outline: none }
+    .btn { display:inline-flex; align-items:center; justify-content:center; height: 36px; padding: 0 12px; border: 0; border-radius: 10px; background: var(--accent); color:#0b1022; font-weight:800; cursor:pointer }
+    .btn.ghost { background: transparent; border: 1px solid var(--border); color: var(--ink) }
+    .row { display:flex; align-items:center; gap:10px }
+    .msg { font-size: 13px; color: var(--muted) }
+    .msg.ok { color: #22c55e }
+    .msg.err { color: var(--danger) }
+    table { width: 100%; border-collapse: collapse }
+    th, td { text-align:left; padding: 10px; border-bottom: 1px solid var(--border) }
+    th { color: var(--muted); font-weight: 500 }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <a class="link" href="dashboard.html">← Back</a>
+      <div class="spacer"></div>
+      <span id="active" class="badge">Active: …</span>
+      <a class="link" href="login.html">Login</a>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 8px 0">Add Student</h3>
+      <div class="grid">
+        <div class="field"><label class="label">Student ID</label><input id="sid" class="input" placeholder="e.g., s001"></div>
+        <div class="field"><label class="label">Name</label><input id="name" class="input" placeholder="e.g., Ada Lovelace"></div>
+        <div class="field"><label class="label">Email (optional)</label><input id="email" class="input" placeholder="e.g., a@ex.com"></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button id="add" class="btn">Add</button>
+        <span id="msg" class="msg"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <h3 style="margin:0">Students</h3>
+        <span id="total" class="badge">0</span>
+      </div>
+      <div style="overflow:auto; margin-top:8px">
+        <table id="tbl"><thead><tr><th>Student ID</th><th>Name</th><th>Email</th><th>Actions</th></tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const origin = location.origin;
+    const api = (p) => origin.replace(/\/$/, '') + '/' + String(p||'').replace(/^\/+/, '');
+    async function setActive(){ try{ const r=await fetch(api('/api/active-experiment')); const d=await r.json(); document.getElementById('active').textContent = `Active: ${d.active || 'none'}`; }catch{} }
+    setActive();
+
+    const tblBody = document.querySelector('#tbl tbody');
+    const total = document.getElementById('total');
+    const msg = document.getElementById('msg');
+    function setMsg(text, ok=false){ msg.textContent = text || ''; msg.className = `msg ${ok? 'ok': text? 'err':''}`; }
+    async function extractError(resp){ try{ const d=await resp.json(); if(d && d.detail!==undefined){ return typeof d.detail==='string'? d.detail: JSON.stringify(d.detail);} }catch{} try{ return await resp.text(); }catch{} return ''; }
+
+    async function load(){
+      try {
+        const r = await fetch(api('/admin/students'), { credentials: 'include' });
+        if (!r.ok) { if (r.status===401) { setMsg('Login required'); return; } if (r.status===409) { setMsg('No active experiment'); return; } throw new Error(await extractError(r)||`HTTP ${r.status}`); }
+        const d = await r.json();
+        const rows = d.students || [];
+        tblBody.innerHTML = '';
+        rows.forEach(s => {
+          const tr = document.createElement('tr');
+          const actions = document.createElement('td');
+          const btnDel = document.createElement('button'); btnDel.className='btn ghost'; btnDel.textContent='Delete';
+          btnDel.onclick = async () => { if(!confirm(`Delete ${s.student_id}?`)) return; const rr=await fetch(api(`/admin/student/${encodeURIComponent(s.student_id)}`), {method:'DELETE', credentials:'include'}); if(!rr.ok){ alert(await extractError(rr)||`HTTP ${rr.status}`); return; } load(); };
+          const btnClear = document.createElement('button'); btnClear.className='btn ghost'; btnClear.style.marginLeft='8px'; btnClear.textContent='Clear Logs';
+          btnClear.onclick = async () => { if(!confirm(`Delete ALL logs for ${s.student_id}?`)) return; const rr=await fetch(api(`/admin/logs/student/${encodeURIComponent(s.student_id)}`), {method:'DELETE', credentials:'include'}); if(!rr.ok){ alert(await extractError(rr)||`HTTP ${rr.status}`); return; } alert('Logs cleared'); };
+          actions.appendChild(btnDel); actions.appendChild(btnClear);
+          tr.innerHTML = `<td>${s.student_id}</td><td>${s.name||''}</td><td>${s.email||''}</td>`;
+          tr.appendChild(actions);
+          tblBody.appendChild(tr);
+        });
+        total.textContent = rows.length;
+        setMsg('');
+      } catch (e) { setMsg(e.message || String(e)); }
+    }
+
+    document.getElementById('add').onclick = async () => {
+      const sid = document.getElementById('sid').value.trim();
+      const name = document.getElementById('name').value.trim();
+      const email = document.getElementById('email').value.trim();
+      if(!sid || !name) { setMsg('Student ID and Name required'); return; }
+      try {
+        const r = await fetch(api('/admin/add-student'), { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({ student_id: sid, name, email: email || undefined }) });
+        if (!r.ok) throw new Error(await extractError(r)||`HTTP ${r.status}`);
+        setMsg('Added', true);
+        document.getElementById('sid').value=''; document.getElementById('name').value=''; document.getElementById('email').value='';
+        load();
+      } catch (e) { setMsg(e.message || String(e)); }
+    };
+
+    load();
+  </script>
+</body>
+</html>

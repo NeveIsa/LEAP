@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>LoopLab • Quiz</title>
+  <title>QuizLab • Quiz</title>
   <link rel="stylesheet" href="style/app.css" />
   <!-- Markdown + Math + Code highlight (CDN for minimal change) -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
@@ -88,7 +88,6 @@
       if (_md) {
         try { return DOMPurify.sanitize(_md.render(txt)); } catch {}
       }
-      // Fallback: minimal code formatting without full markdown
       let html = txt
         .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
       html = html.replace(/```([\s\S]*?)```/g, (m, code) => `<pre><code class=\"hljs\">${code.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</code></pre>`);
@@ -106,27 +105,22 @@
     const quizFileSel = document.getElementById('quizFile');
 
     // Persist student id
-    sidEl.value = localStorage.getItem('looplab.quiz.sid') || '';
-    sidEl.addEventListener('input', ()=> localStorage.setItem('looplab.quiz.sid', sidEl.value.trim()));
-    trialEl.value = localStorage.getItem('looplab.quiz.trial') || '';
-    trialEl.addEventListener('input', ()=> localStorage.setItem('looplab.quiz.trial', trialEl.value.trim()));
+    sidEl.value = localStorage.getItem('quizlab.quiz.sid') || '';
+    sidEl.addEventListener('input', ()=> localStorage.setItem('quizlab.quiz.sid', sidEl.value.trim()));
+    trialEl.value = localStorage.getItem('quizlab.quiz.trial') || '';
+    trialEl.addEventListener('input', ()=> localStorage.setItem('quizlab.quiz.trial', trialEl.value.trim()));
 
-    // Registration status indicator
-    regEl.textContent = 'unknown';
-    let _regTimer = null;
-    async function checkRegistration() {
-      const sid = sidEl.value.trim();
-      if (!sid) { regEl.textContent = '—'; regEl.className = 'pill'; return; }
-      try {
+    async function checkRegistration(){
+      const sid = (sidEl.value||'').trim();
+      if(!sid){ regEl.textContent = '—'; regEl.className='pill'; return; }
+      try{
         const r = await fetch(`${origin}/is-registered?student_id=${encodeURIComponent(sid)}`);
-        if (!r.ok) throw new Error(String(r.status));
+        if(!r.ok) throw new Error();
         const d = await r.json();
-        if (d && d.registered) { regEl.textContent = 'registered'; regEl.className = 'pill ok'; }
-        else { regEl.textContent = 'not registered'; regEl.className = 'pill err'; }
-      } catch {
-        regEl.textContent = 'unknown'; regEl.className = 'pill';
-      }
+        const ok = !!d.registered; regEl.textContent = ok? 'Registered':'Not registered'; regEl.className = `pill ${ok? 'ok':'err'}`;
+      }catch{ regEl.textContent='?'; regEl.className='pill'; }
     }
+    let _regTimer=null;
     function debounceRegCheck() {
       if (_regTimer) clearTimeout(_regTimer);
       _regTimer = setTimeout(checkRegistration, 300);
@@ -137,8 +131,7 @@
     let QUIZ_FILE = 'questions.md';
 
     async function loadQuizManifest(){
-      // Auto-detect quiz markdown files via server endpoint under this experiment
-      const listUrl = exp ? `${origin}/exp/${exp}/quiz-files` : 'quiz-files';
+      const listUrl = exp ? `${origin}/exp/${exp}/files?ext=md&dir=quiz` : 'files?ext=md&dir=quiz';
       let files = [];
       try {
         const r = await fetch(listUrl, { cache: 'no-store' });
@@ -149,49 +142,34 @@
         }
       } catch {}
       if (files.length === 0) {
-        // Fallback probe: try common filenames that may exist in this folder
-        const candidates = ['questions.md', 'derivatives.md', 'quiz.md'];
+        const candidates = ['quiz/questions.md', 'quiz/derivatives.md', 'quiz/quiz.md'];
         const found = [];
         for (const name of candidates) {
           try { const head = await fetch(name, { method:'HEAD', cache:'no-store' }); if (head.ok) found.push(name); } catch {}
         }
-        files = found.length ? found : ['questions.md'];
+        files = found.length ? found.map(n => n.replace(/^quiz\//,'')) : ['questions.md'];
       }
-      // Populate dropdown
       quizFileSel.innerHTML = '';
       for (const f of files) {
         const opt = document.createElement('option');
         opt.value = f; opt.textContent = f.replace(/\.md$/,'');
         quizFileSel.appendChild(opt);
       }
-      // Restore selection
-      const saved = localStorage.getItem('looplab.quiz.file');
+      const saved = localStorage.getItem('quizlab.quiz.file');
       if (saved && files.includes(saved)) quizFileSel.value = saved;
       QUIZ_FILE = quizFileSel.value || files[0] || 'questions.md';
     }
 
-    // Parse markdown questions
     async function loadQuestions() {
-      console.log('loadQuestions() called');
       try {
-        console.log('Fetching', QUIZ_FILE, '...');
-        const response = await fetch(QUIZ_FILE, { cache: 'no-store' });
-        console.log('Response status:', response.status, response.ok);
-        
+        const response = await fetch(`quiz/${QUIZ_FILE}`, { cache: 'no-store' });
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
-        
         const markdown = await response.text();
-        console.log('Received markdown, length:', markdown.length);
-        console.log('First 200 chars of markdown:', markdown.substring(0, 200));
-        
         QUESTIONS = parseQuestionsEnhanced(markdown);
-        console.log('Final QUESTIONS array length:', QUESTIONS.length);
       } catch (error) {
         console.error('Failed to load questions:', error);
-        console.log('Using fallback hardcoded questions');
-        // Fallback to hardcoded questions
         QUESTIONS = [
           { id: 'q1', text: 'Which method finds roots by halving intervals?', choices: [ 'Newton-Raphson', 'Secant', 'Bisection', 'Fixed-point' ], correct: 2 },
           { id: 'q2', text: 'Derivative of x^2 is:', choices: [ 'x', '2x', 'x^3', 'constant' ], correct: 1 },
@@ -200,7 +178,6 @@
       }
     }
 
-    // Enhanced parser: supports A) radios and A] checkboxes, ✓ correctness, skips code fences
     function parseQuestionsEnhanced(markdown) {
       const questions = [];
       const sections = markdown.split(/^## Question \d+: (\w+)/m);
@@ -238,99 +215,75 @@
             if (hasTick) correctIdxs.push(idx);
           }
         }
-        const type = foundBracket ? 'multi' : (foundParen ? 'single' : 'unknown');
-        if (choices.length) questions.push({ id, text, choices, type, correctIdxs });
+        const isMultiQ = foundBracket && !foundParen ? true : (foundParen && !foundBracket ? false : (correctIdxs.length>1));
+        const q = { id, text, choices };
+        if (isMultiQ) { q.multi = true; q.correct = correctIdxs; } else { q.multi = false; q.correct = correctIdxs.length? correctIdxs[0]: -1; }
+        questions.push(q);
       }
       return questions;
     }
 
     function render(){
-      console.log('render() called with', QUESTIONS.length, 'questions');
-      qsEl.innerHTML='';
-      
-      if (QUESTIONS.length === 0) {
-        qsEl.innerHTML = '<div style="text-align:center;padding:20px;color:orange;">No questions loaded! Check console for errors.</div>';
-        return;
-      }
-      
-      QUESTIONS.forEach((q, idx)=>{
-        console.log('Rendering question', idx+1, ':', q.text);
+      const wrapAll = document.createElement('div');
+      qsEl.innerHTML = '';
+      QUESTIONS.forEach((q,i)=>{
         const wrap = document.createElement('div'); wrap.className='q';
-        const title = document.createElement('h3'); title.innerHTML = `${idx+1}. ` + renderMD(q.text); wrap.appendChild(title);
-        if (q.type === 'multi') { const hint=document.createElement('div'); hint.className='msg'; hint.textContent='Select all that apply'; wrap.appendChild(hint); }
+        wrap.innerHTML = `<h3>Q${i+1}. ${renderMD(q.text)}</h3>`;
         const choices = document.createElement('div'); choices.className='choices';
-        q.choices.forEach((c, i)=>{
-          const id = `${q.id}_${i}`;
-          const label = document.createElement('label'); label.className='row';
-          const inputType = (q.type === 'multi') ? 'checkbox' : 'radio';
-          label.innerHTML = `<input type="${inputType}" name="${q.id}${q.type==='multi'?'[]':''}" value="${i}"> <span class="md">${renderMD(c)}</span>`;
-          choices.appendChild(label);
+        const name = `q_${i}`;
+        q.choices.forEach((t,j)=>{
+          const row = document.createElement('label'); row.className='row';
+          const input = document.createElement('input'); input.type = q.multi? 'checkbox': 'radio'; input.name = name; input.value = String(j);
+          const span = document.createElement('span'); span.innerHTML = renderMD(t);
+          row.appendChild(input); row.appendChild(span);
+          choices.appendChild(row);
         });
-        wrap.appendChild(choices);
-        const row = document.createElement('div'); row.className='row'; row.style.marginTop='10px';
+        const bar = document.createElement('div'); bar.className='row'; bar.style.marginTop='8px';
         const btn = document.createElement('button'); btn.className='btn'; btn.textContent='Submit';
-        const msg = document.createElement('span'); msg.className='msg'; msg.textContent='';
-        row.appendChild(btn); row.appendChild(msg); wrap.appendChild(row);
+        const msg = document.createElement('span'); msg.className='msg';
+        bar.appendChild(btn); bar.appendChild(msg); bar.appendChild(document.createElement('div')).className='spacer';
+        wrap.appendChild(choices); wrap.appendChild(bar);
 
-        btn.onclick = async ()=>{
-          const sid = sidEl.value.trim(); const trial = trialEl.value.trim();
-          if(!sid){ msg.textContent='Enter Student ID'; msg.className='msg err'; return; }
-          const quizname = (QUIZ_FILE || '').replace(/\.md$/,'');
-          let payload;
-          if (q.type === 'multi') {
-            const sels = Array.from(wrap.querySelectorAll(`input[name="${q.id}[]"]:checked`));
-            if (sels.length === 0) { msg.textContent='Select at least one option'; msg.className='msg err'; return; }
-            const idxs = sels.map(el => Number(el.value));
-            payload = { kind:'quiz', quizname, qid:q.id, type:'multi', question:q.text, choice_indices: idxs, choice_texts: idxs.map(j=> q.choices[j]), ts: new Date().toISOString() };
-          } else {
-            const sel = wrap.querySelector(`input[name="${q.id}"]:checked`);
-            if(!sel){ msg.textContent='Select an option'; msg.className='msg err'; return; }
-            const choiceIdx = Number(sel.value);
-            payload = { kind:'quiz', quizname, qid:q.id, type:'single', question:q.text, choice_index: choiceIdx, choice_text: q.choices[choiceIdx], ts: new Date().toISOString() };
-          }
+        btn.onclick = async () => {
+          const sid = (sidEl.value||'').trim(); if(!sid){ alert('Enter Student ID'); return; }
+          const selected = Array.from(choices.querySelectorAll('input:checked')).map(el=>Number(el.value));
+          if(!selected.length){ alert('Pick an answer'); return; }
+          const trial = (trialEl.value||'').trim();
+          const payloadSingle = { kind:'quiz', type:'single', quizname: (QUIZ_FILE||'').replace(/\.md$/,''), qid:q.id, question:q.text, choice_index:selected[0], choice_text: String(q.choices[selected[0]]||''), ts: new Date().toISOString() };
+          const payloadMulti = { kind:'quiz', type:'multi', quizname: (QUIZ_FILE||'').replace(/\.md$/,''), qid:q.id, question:q.text, choice_indices:selected, choice_texts: selected.map(k=> String(q.choices[k]||'')), ts: new Date().toISOString() };
+          const args = [ q.multi? payloadMulti: payloadSingle ];
           try{
-            // Root /call requires experiment_name; verify against active
-            let experiment_name = '';
-            try { const r = await fetch(`${origin}/api/active-experiment`); if (r.ok) { const d = await r.json(); experiment_name = d.active || ''; } } catch {}
-            const res = await fetch(`${origin}/call`,{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ student_id: sid, func_name: 'echo', args: [payload], trial: trial || undefined, experiment_name })});
-            if(!res.ok){ let t=''; try{ const d = await res.json(); t = typeof d.detail==='string'? d.detail: JSON.stringify(d.detail);}catch{ try{ t = await res.text(); }catch{} } throw new Error(t||`HTTP ${res.status}`); }
+            const r = await fetch(`${origin}/call`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ student_id: sid, func_name:'echo', args, experiment_name: exp, trial }) });
+            if(!r.ok){ msg.textContent = `Error: HTTP ${r.status}`; msg.className='msg err'; return; }
             msg.textContent='Logged'; msg.className='msg ok';
-          }catch(e){ msg.textContent = e.message || String(e); msg.className='msg err'; }
+          }catch(e){ msg.textContent='Network error'; msg.className='msg err'; }
         };
 
         qsEl.appendChild(wrap);
       });
     }
 
-    // (inline stats removed; see quiz-stats.html)
-
-    // stats handler moved to new page link below
-    // Initialize the quiz
     (async () => {
       qsEl.innerHTML = '<div style="text-align:center;padding:20px;">Loading questions...</div>';
       try {
         await loadQuizManifest();
         await loadQuestions();
-        console.log('Loaded questions:', QUESTIONS);
         render();
         if ((sidEl.value || '').trim()) { checkRegistration(); }
       } catch (error) {
-        console.error('Failed to initialize quiz:', error);
         qsEl.innerHTML = '<div style="text-align:center;padding:20px;color:red;">Failed to load questions. Using fallback questions.</div>';
         setTimeout(() => render(), 1000);
       }
     })();
 
-    // React to quiz file changes
     quizFileSel.addEventListener('change', async ()=>{
       QUIZ_FILE = quizFileSel.value || 'questions.md';
-      localStorage.setItem('looplab.quiz.file', QUIZ_FILE);
+      localStorage.setItem('quizlab.quiz.file', QUIZ_FILE);
       qsEl.innerHTML = '<div style="text-align:center;padding:20px;">Loading questions...</div>';
       await loadQuestions();
       render();
     });
 
-    // Open stats page for the selected quiz file
     statsBtn.addEventListener('click', ()=>{
       const quizname = (QUIZ_FILE || '').replace(/\.md$/,'');
       const trial = (trialEl.value||'').trim();

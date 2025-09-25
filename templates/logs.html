@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Logs</title>
+  <link rel="stylesheet" href="style/theme.css">
+  <style>
+    :root { --bg:#0f1221; --panel:#151935; --ink:#e6e9f5; --muted:#9aa3b2; --accent:#77ffd7; --border:#232949; --danger:#ef4444; }
+    * { box-sizing: border-box }
+    html, body { margin:0; padding:0; background: var(--bg); color: var(--ink); font-family: Inter, system-ui, Segoe UI, Roboto, Ubuntu, Cantarell, Arial, sans-serif; }
+    .wrap { max-width: 1100px; margin: 32px auto; padding: 0 16px; }
+    .top { display:flex; align-items:center; gap:12px; margin-bottom: 16px; }
+    .spacer { flex:1 }
+    .badge { display:inline-block; padding:6px 10px; border-radius:999px; background: var(--accent); color:#0b1022; font-weight:700 }
+    .link { color: var(--accent); text-decoration: none }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 14px }
+    .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px }
+    .field { display:flex; flex-direction:column; gap:6px }
+    .label { font-size: 12px; color: var(--muted) }
+    .input, select { height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border); background: #0e132a; color: var(--ink); outline: none }
+    .btn { display:inline-flex; align-items:center; justify-content:center; height: 36px; padding: 0 12px; border: 0; border-radius: 10px; background: var(--accent); color:#0b1022; font-weight:800; cursor:pointer }
+    .row { display:flex; align-items:center; gap:10px; flex-wrap: wrap }
+    .msg { font-size: 13px; color: var(--muted) }
+    table { width: 100%; border-collapse: collapse }
+    th, td { text-align:left; padding: 8px 10px; border-bottom: 1px solid var(--border) }
+    th { color: var(--muted); font-weight: 500; position: sticky; top: 0; background: var(--panel) }
+    .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; color: #cbd5e1; word-break: break-word }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <a class="link" href="dashboard.html">← Back</a>
+      <div class="spacer"></div>
+      <span id="active" class="badge">Active: …</span>
+      <a class="link" href="login.html">Login</a>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 8px 0">Filters</h3>
+      <div class="grid">
+        <div class="field"><label class="label">Student</label><input id="sid" class="input" placeholder="All"></div>
+        <div class="field"><label class="label">Trial</label><input id="trial" class="input" placeholder="All"></div>
+        <div class="field"><label class="label">Limit</label><input id="limit" class="input" type="number" value="100"></div>
+        <div class="field"><label class="label">Order</label><select id="order" class="input"><option value="latest">latest</option><option value="earliest">earliest</option></select></div>
+        <div class="field"><label class="label">Start (ISO)</label><input id="start" class="input" placeholder="2025-01-01T00:00:00Z"></div>
+        <div class="field"><label class="label">End (ISO)</label><input id="end" class="input" placeholder="2025-01-01T12:00:00Z"></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button id="apply" class="btn">Apply</button>
+        <span id="status" class="msg">—</span>
+      </div>
+    </div>
+
+    <div class="card" style="padding:0">
+      <div style="overflow:auto; max-height: 70vh">
+        <table id="tbl">
+          <thead>
+            <tr>
+              <th style="min-width:140px">Time</th>
+              <th style="min-width:80px">Student</th>
+              <th style="min-width:160px">Trial</th>
+              <th style="min-width:140px">Function</th>
+              <th style="min-width:260px">Args</th>
+              <th style="min-width:260px">Result</th>
+              <th style="min-width:180px">Error</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const origin = location.origin;
+    const api = (p) => origin.replace(/\/$/, '') + '/' + String(p||'').replace(/^\/+/, '');
+    async function setActive(){ try{ const r=await fetch(api('/api/active-experiment')); const d=await r.json(); document.getElementById('active').textContent = `Active: ${d.active || 'none'}`; }catch{} }
+    setActive();
+
+    const tblBody = document.querySelector('#tbl tbody');
+    const status = document.getElementById('status');
+
+    function rowHTML(row){
+      const ts = new Date(row.ts).toLocaleString();
+      const sid = row.student_id || '';
+      const trial = (row.trial || row.experiment_name) || '';
+      const fn = row.func_name || '';
+      const args = (typeof row.args_json === 'string') ? row.args_json : JSON.stringify(row.args_json);
+      const result = (typeof row.result_json === 'string') ? row.result_json : JSON.stringify(row.result_json);
+      const err = row.error || '';
+      return `<tr>
+        <td>${ts}</td>
+        <td>${sid}</td>
+        <td>${trial}</td>
+        <td>${fn}</td>
+        <td class="mono">${args}</td>
+        <td class="mono">${result}</td>
+        <td class="mono" style="color: var(--danger)">${err}</td>
+      </tr>`;
+    }
+
+    async function fetchLogs(){
+      try{
+        const sid = document.getElementById('sid').value.trim();
+        const trial = document.getElementById('trial').value.trim();
+        const limit = Math.max(1, Math.min(10000, Number(document.getElementById('limit').value)||100));
+        const order = document.getElementById('order').value;
+        const start = document.getElementById('start').value.trim();
+        const end = document.getElementById('end').value.trim();
+        const q = new URLSearchParams({ n:String(limit), order });
+        if (sid) q.set('student_id', sid);
+        if (trial) q.set('trial', trial);
+        if (start) q.set('start_time', start);
+        if (end) q.set('end_time', end);
+        const r = await fetch(api('/logs') + `?${q.toString()}`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const d = await r.json();
+        return d.logs || [];
+      }catch(e){ status.textContent = (e && e.message) ? e.message : String(e); status.className='msg'; return []; }
+    }
+
+    async function apply(){
+      status.textContent = 'Loading…';
+      const logs = await fetchLogs();
+      tblBody.innerHTML = logs.map(rowHTML).join('');
+      status.textContent = `${logs.length} logs`;
+    }
+
+    document.getElementById('apply').onclick = apply;
+    apply();
+  </script>
+</body>
+</html>

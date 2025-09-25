@@ -6,6 +6,7 @@ import inspect
 import json
 import os
 from typing import Any, Callable, Dict, Optional
+import re
 
 from fastapi.encoders import jsonable_encoder
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -195,7 +196,7 @@ class ActiveExperimentUIGuard(BaseHTTPMiddleware):
         try:
             path = request.url.path or ''
             active = self.current_active()
-            # The middleware sees full paths like /exp/looplab/admin/login, not relative paths
+            # The middleware sees full paths like /exp/<experiment>/admin/login, not relative paths
             is_admin_path = f'/exp/{self.experiment_name}/admin' in path
             
             # Block all access when experiment is not active, except admin endpoints for authentication
@@ -285,15 +286,45 @@ def build_experiment_app(
         return {"message": "Logged out"}
 
     @app.get("/admin/ping")
-    async def admin_ping():
-        return {"ok": True}
-
-    @app.get("/quiz-files")
-    def list_quiz_markdown_files():
-        files = []
+    async def admin_ping(request: Request):
         try:
-            for name in os.listdir(ui_dir):
-                if name.lower().endswith('.md'):
+            auth_map = request.session.get("auth_experiments") or {}
+            if auth_map.get(experiment_name, False):
+                return {"ok": True}
+        except Exception:
+            pass
+        # Not authenticated for this experiment
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+
+    @app.get("/files")
+    def list_files(ext: Optional[str] = Query(None), dir: Optional[str] = Query(None)):
+        """List files in the experiment's UI directory.
+
+        - Query params:
+          - ext: optional file extension filter (e.g., "md" or ".md").
+          - dir: optional subdirectory under UI (e.g., "quiz"). Single segment only.
+        """
+        files: list[str] = []
+        try:
+            norm_ext = None
+            if ext:
+                norm_ext = ext if ext.startswith(".") else f".{ext}"
+                norm_ext = norm_ext.lower()
+            base_dir = ui_dir
+            if dir:
+                # allow only a safe single-segment directory name to avoid traversal
+                if not re.match(r"^[A-Za-z0-9_-]+$", dir or ""):
+                    return {"files": []}
+                cand = os.path.join(ui_dir, dir)
+                if os.path.isdir(cand):
+                    base_dir = cand
+                else:
+                    return {"files": []}
+            for name in os.listdir(base_dir):
+                if norm_ext:
+                    if name.lower().endswith(norm_ext):
+                        files.append(name)
+                else:
                     files.append(name)
         except Exception:
             pass

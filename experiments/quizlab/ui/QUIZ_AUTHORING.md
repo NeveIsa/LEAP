@@ -1,12 +1,12 @@
-# LoopLab Quiz Authoring Cheat Sheet
+# Quiz Authoring Cheat Sheet
 
-Write quizzes as Markdown files in `experiments/looplab/ui/` (one quiz per file).
+Write quizzes as Markdown files in `experiments/<experiment>/ui/quiz/` (one quiz per file).
 The quiz page auto‑detects files and lets you choose which one to run.
 
 ## File Placement
 
-- Put files next to the UI: `experiments/looplab/ui/questions.md`, `experiments/looplab/ui/derivatives.md`, etc.
-- The quiz name is the file name without `.md` (used in logs and stats).
+- Put files under `experiments/<experiment>/ui/quiz/`: e.g., `experiments/<experiment>/ui/quiz/questions.md`, `experiments/<experiment>/ui/quiz/derivatives.md`.
+- The quiz name is the file name (without `.md`) (used in logs and stats).
 
 ## Question Structure
 
@@ -75,6 +75,6 @@ D] 9
 - Keep prompts succinct; long code/math still works but titles are truncated in places.
 - Use a Trial label on the quiz page to separate runs (helps stats).
 - Registration pill checks `GET /is-registered?student_id=...` for the active experiment.
-- If the quiz dropdown looks empty, ensure the server’s `/exp/<experiment>/quiz-files` is reachable; the UI falls back to probing common filenames.
+- If the quiz dropdown looks empty, ensure the server’s `/exp/<experiment>/files?ext=md&dir=quiz` is reachable; the UI falls back to probing `quiz/questions.md`, `quiz/derivatives.md`.
 
 That’s it — save the `.md` file and refresh the quiz page.

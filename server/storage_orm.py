@@ -39,7 +39,7 @@ class Log(Base):
     id: Mapped[int] = mapped_column(Integer, log_id_seq, primary_key=True, server_default=log_id_seq.next_value())
     ts: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow, index=True, nullable=False)
     student_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
-    # True experiment id (e.g., "default", "looplab")
+    # True experiment id (e.g., "default", "quizlab")
     experiment_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     # Trial/run label within an experiment
     trial: Mapped[Optional[str]] = mapped_column(String, nullable=True)

@@ -1,4 +1,4 @@
-# LoopLab sample functions
+# QuizLab sample functions
 
 def square(x: float) -> float:
     """Return x^2."""

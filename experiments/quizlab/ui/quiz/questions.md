@@ -1,4 +1,4 @@
-# LoopLab Quiz Questions
+# QuizLab Quiz Questions
 
 ## Question 1: q1
 **Which numerical method finds roots by repeatedly halving intervals?**
