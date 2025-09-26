@@ -57,48 +57,21 @@
         <h1>System Architecture</h1>
         
         <div class="mermaid">
-            flowchart TB
-                subgraph clients [Client Layer]
-                    A1[RPCClient Python]
-                    A2[Jupyter Notebooks] 
-                    A3[Quiz Web Interface]
-                end
+            flowchart LR
+                A[Students<br/>Python, Jupyter, Browser] 
+                B[FastAPI Server<br/>Execute & Log Functions]
+                C[Python Functions<br/>rosenbrock, cubic, etc.]
+                D[(DuckDB<br/>Interaction Logs)]
+                E[Instructor Dashboard<br/>Analytics & Monitoring]
                 
-                subgraph server [FastAPI Server]
-                    B1["/functions - Discovery"]
-                    B2["/call - Execute & Log"]
-                    B3["/logs - Analytics"]
-                    B4["Admin & Auth"]
-                end
-                
-                subgraph experiments [Experiment Layer]
-                    C1[Numerical Methods<br/>rosenbrock, cubic, square]
-                    C2[Interactive Quizzes<br/>quiz.html, markdown]
-                end
-                
-                subgraph storage [Storage & Analytics]
-                    D1[SQLAlchemy ORM]
-                    D2[DuckDB Files]
-                    D3[Dashboard UI]
-                end
-                
-                A1 --> B2
-                A2 --> B2
-                A3 --> B2
-                
-                B1 --> C1
-                B1 --> C2
-                B2 --> C1
-                B2 --> C2
-                
-                B2 --> D1
-                B3 --> D1
-                D1 --> D2
-                D1 --> D3
+                A --|POST /call|--> B
+                B --> C
+                B --> D
+                D --|GET /logs|--> E
         </div>
         
         <p class="caption">
-            Multi-client architecture with isolated experiments, comprehensive logging, and real-time analytics for adaptive teaching
+            Simple request-response architecture with comprehensive logging for educational analytics
         </p>
     </div>
 </body>
