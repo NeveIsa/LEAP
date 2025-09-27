@@ -1,0 +1,31 @@
+:root{
+  --bg:#0f1221;--panel:#151935;--ink:#e6e9f5;--muted:#9aa3b2;--accent:#77ffd7;--accent-2:#6aa3ff;--danger:#ff6b6b;--warn:#ffd166;--ok:#7ef29a;
+  --border: #22284a;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,Segoe UI,Roboto,Ubuntu,Cantarell,'Helvetica Neue',Arial,sans-serif}
+.wrap{max-width:1100px;margin:40px auto;padding:0 20px}
+.top{display:flex;gap:12px;align-items:center;margin-bottom:16px}
+.spacer{flex:1}
+.badge{display:inline-block;padding:6px 10px;border:1px solid var(--border);border-radius:999px;color:#0a0d1e;background:var(--accent);font-weight:600}
+.link{color:var(--accent-2);text-decoration:none}
+.nav{display:flex;gap:10px}
+.nav a{padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--panel);color:var(--ink);text-decoration:none}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.btn{background:linear-gradient(135deg,var(--accent),var(--accent-2));border:none;color:#0a0d1e;padding:10px 14px;border-radius:10px;font-weight:700;cursor:pointer}
+.btn.warn{background:var(--warn);}
+.btn.danger{background:var(--danger);} 
+.btn.ghost{background:transparent;border:1px solid var(--border);color:var(--ink)}
+.field{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
+.input, select{background:#0e132a;border:1px solid var(--border);border-radius:8px;color:var(--ink);padding:10px}
+.table{width:100%;border-collapse:collapse}
+.table th,.table td{border-bottom:1px solid var(--border);padding:10px;text-align:left}
+.table th{color:var(--muted);font-weight:500}
+.pill{padding:4px 8px;border-radius:999px;background:#0e132a;border:1px solid var(--border);color:var(--muted);font-size:12px}
+.msg{font-size:13px;color:var(--muted)}
+.ok{color:var(--ok)} .err{color:var(--danger)}
+.kpi{display:flex;align-items:center;gap:10px}
+.kpi .num{font-size:28px;font-weight:800}
+.stack{display:flex;flex-direction:column;gap:10px}
+.spark-canvas{width:100%;max-width:360px;height:48px;background:var(--panel);border:1px solid var(--border);border-radius:6px;display:block}

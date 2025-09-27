@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>LoopLab • Quiz Stats</title>
+  <link rel="stylesheet" href="style/app.css" />
+  <!-- Markdown + Math + Code highlight for rendering titles -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css">
+  <style>
+    .table td,.table th{padding:6px 8px;border-bottom:1px solid var(--border)}
+  </style>
+  <script>
+    // Basic markdown question parser (same logic as quiz.html)
+    function parseMarkdownQuestions(markdown) {
+      const questions = [];
+      const sections = markdown.split(/^## Question \d+: (\w+)/m);
+      for (let i = 1; i < sections.length; i += 2) {
+        const id = sections[i];
+        const content = sections[i + 1] || '';
+        const lines = content.trim().split('\n');
+        // Find question text (bold **...**)
+        let text = '';
+        for (const line of lines) {
+          const m = line.match(/^\*\*(.+)\*\*$/);
+          if (m) { text = m[1].trim(); break; }
+        }
+        const choices = [];
+        let correct = -1;
+        lines.forEach((line) => {
+          const m = line.match(/^[A-Z]\)\s*(.*?)$/);
+          if (m) {
+            let t = m[1].trim();
+            const hasCheck = /\s*✓\s*$/.test(t);
+            if (hasCheck) { t = t.replace(/\s*✓\s*$/, '').trim(); correct = choices.length; }
+            choices.push(t);
+          }
+        });
+        if (choices.length && correct >= 0) questions.push({ id, text, choices, correct });
+      }
+      return questions;
+    }
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markdown-it@13.0.2/dist/markdown-it.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markdown-it-katex@2.0.3/dist/markdown-it-katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/build/highlight.min.js"></script>
+  <script>
+    let _md = null;
+    if (window.markdownit) {
+      _md = window.markdownit({
+        html: false,
+        linkify: true,
+        typographer: true,
+        highlight: (str, lang) => {
+          try {
+            if (lang && window.hljs && window.hljs.getLanguage(lang)) {
+              return `<pre><code class=\"hljs language-${lang}\">` +
+                     window.hljs.highlight(str, { language: lang, ignoreIllegals: true }).value +
+                     '</code></pre>';
+            }
+          } catch {}
+          const esc = _md.utils.escapeHtml(str);
+          return `<pre><code class=\"hljs\">${esc}</code></pre>`;
+      }
+      });
+      if (window.markdownitKatex) {
+        try { _md = _md.use(window.markdownitKatex); } catch {}
+      }
+    }
+    function renderMD(s){
+      const txt = String(s || '');
+      if (_md) {
+        try { return DOMPurify.sanitize(_md.render(txt)); } catch {}
+      }
+      let html = txt
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      html = html.replace(/```([\s\S]*?)```/g, (m, code) => `<pre><code class=\"hljs\">${code.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</code></pre>`);
+      html = html.replace(/`([^`]+)`/g, (m, code) => `<code>${code.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</code>`);
+      return DOMPurify.sanitize(html);
+    }
+  </script>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <a class="link" href="dashboard.html">← Back</a>
+      <div class="spacer"></div>
+      <span id="active" class="badge">Active: …</span>
+    </div>
+    <h1 style="margin:8px 0 10px 0;">Quiz Statistics</h1>
+    <div id="meta" class="msg">—</div>
+    <div id="cap" class="msg" style="display:none; color:#b45309">Showing latest 10,000 submissions (results may be truncated). Narrow by Trial or time window for full coverage.</div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div class="row" style="gap:8px; flex-wrap:wrap; align-items:center;">
+        <label class="row" style="gap:6px;">
+          <span class="pill">Quiz</span>
+          <input id="quizname" class="input" style="min-width:180px" readonly>
+        </label>
+        <label class="row" style="gap:6px;">
+          <span class="pill">Trial</span>
+          <input id="trial" class="input" placeholder="All" style="min-width:160px">
+        </label>
+        <label class="row" style="gap:6px; font-size: 0.9em; opacity: 0.9">
+          <input id="dedupe" type="checkbox" checked>
+          <span>Deduplicate by student</span>
+        </label>
+        <button id="refresh" class="btn">Refresh</button>
+        <button id="csv" class="btn ghost">Export CSV</button>
+        <span id="status" class="msg">—</span>
+      </div>
+    </div>
+
+    <div id="panel" class="card">Loading…</div>
+  </div>
+
+  <script>
+    const origin = location.origin; const m = location.pathname.match(/\/exp\/([^\/]+)/); const exp = m? m[1]: null;
+    (async()=>{ try{ const r=await fetch(`${origin}/api/active-experiment`); const d=await r.json(); document.getElementById('active').textContent = `Active: ${d.active || 'none'}`; }catch{} })();
+
+    const url = new URL(location.href);
+    let quizParam = (url.searchParams.get('quiz') || '').trim(); // name without .md
+    const trialParam = (url.searchParams.get('trial') || '').trim();
+    const quiznameEl = document.getElementById('quizname');
+    const trialEl = document.getElementById('trial');
+    const dedupeEl = document.getElementById('dedupe');
+    const statusEl = document.getElementById('status');
+    const panelEl = document.getElementById('panel');
+    const metaEl = document.getElementById('meta');
+    const capEl = document.getElementById('cap');
+    quiznameEl.value = quizParam || '(unknown)';
+    if (trialParam) trialEl.value = trialParam;
+
+    async function discoverQuizFiles(){
+      // Hit experiment-local endpoint to list quiz markdown files
+      const listUrl = exp ? `${origin}/exp/${exp}/quiz-files` : 'quiz-files';
+      const r = await fetch(listUrl, { cache: 'no-store' });
+      if (!r.ok) return [];
+      const d = await r.json();
+      const arr = (d && Array.isArray(d.files)) ? d.files : [];
+      return arr.filter(x => typeof x === 'string' && x.toLowerCase().endsWith('.md'));
+    }
+
+    async function ensureQuizParam(){
+      if (quizParam) return;
+      const files = await discoverQuizFiles();
+      if (files.length === 0) {
+        panelEl.textContent = 'No quiz files found.';
+        throw new Error('No quiz files');
+      }
+      const first = files[0].replace(/\.md$/,'');
+      const newUrl = new URL(location.href);
+      newUrl.searchParams.set('quiz', first);
+      if (trialParam) newUrl.searchParams.set('trial', trialParam);
+      location.replace(newUrl.toString());
+    }
+
+    async function loadQuestionsMd(name){
+      const file = `${name}.md`;
+      const r = await fetch(file, { cache: 'no-store' });
+      if(!r.ok) throw new Error(`Missing quiz file: ${file}`);
+      const md = await r.text();
+      return parseMarkdownQuestions(md);
+    }
+
+    async function fetchLogs(){
+      // Increased server cap allows up to 10,000
+      const params = new URLSearchParams({ n: '10000', order: 'latest' });
+      const t = (trialEl.value||'').trim(); if (t) params.set('trial', t);
+      const r = await fetch(`${origin}/logs?${params.toString()}`);
+      if(!r.ok) throw new Error(`HTTP ${r.status}`);
+      const d = await r.json();
+      return Array.isArray(d.logs)? d.logs: [];
+    }
+
+    function extractQuizEvents(logs){
+      const name = quizParam;
+      const ev = [];
+      for(const row of logs){
+        try{
+          const args = row.args_json;
+          if(Array.isArray(args) && args.length>0 && args[0] && args[0].kind==='quiz'){
+            const p = args[0];
+            if ((p.quizname||'') === name) {
+              if (Array.isArray(p.choice_indices)) {
+                ev.push({ ts: row.ts, student_id: row.student_id, qid: p.qid, choice_indices: p.choice_indices.map(Number), question: p.question });
+              } else {
+                ev.push({ ts: row.ts, student_id: row.student_id, qid: p.qid, choice_index: Number(p.choice_index), question: p.question });
+              }
+            }
+          }
+        }catch{}
+      }
+      if(dedupeEl.checked){
+        const latest = new Map();
+        for(const e of ev){ const k = `${e.qid}::${e.student_id}`; const prev = latest.get(k); if(!prev || e.ts > prev.ts) latest.set(k, e); }
+        return Array.from(latest.values());
+      }
+      return ev;
+    }
+
+    function aggregate(questions, events){
+      const qIndex = new Map(questions.map((q,i)=>[q.id,{idx:i,q}]));
+      const counts = questions.map(q => Array(q.choices.length).fill(0));
+      const totalPerQ = questions.map(_ => 0);
+      for(const e of events){
+        const qi = qIndex.get(e.qid); if(!qi) continue;
+        const i = qi.idx;
+        if (Array.isArray(e.choice_indices)) {
+          // Multi-select: increment each selected choice; count one submission
+          const ids = e.choice_indices.filter(n => Number.isFinite(n) && n>=0 && n<counts[i].length);
+          for (const c of ids) counts[i][c]++;
+          totalPerQ[i]++;
+        } else if(Number.isFinite(e.choice_index) && e.choice_index>=0 && e.choice_index<counts[i].length){
+          counts[i][e.choice_index]++; totalPerQ[i]++;
+        }
+      }
+      return {counts,totalPerQ};
+    }
+
+    function render(questions, agg){
+      const {counts,totalPerQ} = agg;
+      let html = '';
+      // Only charts (no tabular repeat of the quiz)
+      html += '<div style="margin-top:4px">';
+      questions.forEach((q,i)=>{
+        const totals = counts[i] || []; const total = totalPerQ[i] || 0;
+        const maxV = Math.max(1, ...totals);
+        const titleHTML = renderMD(q.text);
+        html += `<div class="card" style="margin:8px 0; padding:10px"><div class="msg" style="margin-bottom:6px">${i+1}. ${titleHTML}</div>`;
+        for(let j=0;j<q.choices.length;j++){
+          const v = totals[j]||0; const pct = total? Math.round(100*v/total):0; const isC = (typeof q.correct==='number' && j===q.correct);
+          html += `<div style="display:flex; align-items:center; gap:8px; margin:4px 0">
+            <div style="width:22px; text-align:center; font-weight:600">${String.fromCharCode(65+j)}</div>
+            <div style="flex:1; background:var(--panel); border:1px solid var(--border); border-radius:6px; overflow:hidden">
+              <div style="height:16px; width:${Math.max(6, Math.round((v/maxV)*100))}%; background:${isC? 'var(--ok,#4caf50)':'var(--muted,#556)'}"></div>
+            </div>
+            <div style="width:90px; text-align:right; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; ${isC? 'font-weight:600':''}">${v} (${pct}%)</div>
+          </div>`;
+        }
+        html += '</div>';
+      });
+      html += '</div>';
+      panelEl.innerHTML = html;
+    }
+
+    async function refresh(){
+      statusEl.textContent = 'Loading…'; statusEl.className = 'msg';
+      try{
+        const [questions, logs] = await Promise.all([loadQuestionsMd(quizParam), fetchLogs()]);
+        const events = extractQuizEvents(logs);
+        const agg = aggregate(questions, events);
+        render(questions, agg);
+        statusEl.textContent = `Updated ${new Date().toLocaleTimeString()}`; statusEl.className = 'msg ok';
+        metaEl.textContent = `${events.length} submissions considered${dedupeEl.checked? ' (deduped)': ''}`;
+        if (Array.isArray(logs) && logs.length >= 10000) {
+          capEl.style.display = '';
+        } else {
+          capEl.style.display = 'none';
+        }
+      }catch(e){ panelEl.textContent = e.message || String(e); statusEl.textContent = 'Error'; statusEl.className = 'msg err'; }
+    }
+
+    document.getElementById('refresh').addEventListener('click', refresh);
+    document.getElementById('csv').addEventListener('click', async ()=>{
+      try{
+        const logs = await fetchLogs();
+        let events = extractQuizEvents(logs);
+        const lines = [ ['student_id','qid','question','choice_index','choice_text','ts'].map(v=>`"${String(v).replaceAll('"','""')}"`).join(',') ];
+        for(const e of events){
+          const row = [e.student_id, e.qid, e.question||'', e.choice_index, e.choice_text||'', e.ts].map(v=>`"${String(v??'').replaceAll('"','""')}"`).join(',');
+          lines.push(row);
+        }
+        const blob = new Blob([lines.join('\n')], { type:'text/csv;charset=utf-8;' });
+        const u = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download = `quiz_${quizParam}_${(trialEl.value||'all')}.csv`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u), 1000);
+      }catch{}
+    });
+
+    dedupeEl.addEventListener('change', refresh);
+    (async()=>{ await ensureQuizParam(); await refresh(); })();
+  </script>
+</body>
+</html>
