@@ -24,18 +24,18 @@ body main{
 ## A Unified Framework for Algorithm Exploration, Real-Time Analytics, and Live Assessment
 
 ### Abstract
-Computational education benefits from approaches that engage students with algorithmic thinking while providing instructors actionable insights into learning processes. Traditional lecture-based approaches often lack mechanisms to capture the iterative nature of computational problem-solving. We present a **distributed interactive learning platform** that transforms instructor-authored Python functions into accessible HTTP endpoints, enabling real-time algorithmic exploration with comprehensive analytics. 
+Interactive computational exercises can help students explore algorithmic concepts through direct experimentation. We present a platform that exposes Python functions as HTTP endpoints, allowing students to call functions remotely while logging all interactions for later analysis. 
 
-The platform organizes content as modular "experiments" containing callable functions across domains including numerical methods, graph algorithms, Monte Carlo simulations, differential equations, and linear algebra. Students interact through multiple client types—Python scripts, Jupyter notebooks, or command-line interfaces—while all function calls are logged for analysis. The system includes unified authentication across experiments and supports assessment through Markdown-authored quizzes with LaTeX mathematical notation.
+The platform organizes content as modular "experiments" containing callable Python functions. Current implementation includes 9 experiments with simple functions for educational exploration: basic mathematical functions (square, cubic, quadratic), optimization functions (Rosenbrock), graph traversal helpers, Monte Carlo sampling, differential equation examples, and matrix operations. Students call these functions via HTTP from any client while all interactions are logged to DuckDB. The system includes unified authentication and a quiz framework for one experiment.
 
-We describe the system architecture, instructor workflow, and deployment patterns. Our evaluation combines interaction log analysis with learning assessments. The platform is available as open-source software for educational use.
+We describe the system architecture and current implementation. The platform is available as open-source software and designed to support educational research through interaction logging.
 
 ---
 
 ## 1. Introduction and Motivation
 Active learning methodologies have demonstrated significant efficacy in computational education, yet conventional classroom environments predominantly rely on static presentations, whiteboard demonstrations, or isolated computing environments. These traditional approaches constrain instructors' capacity to monitor student engagement, capture learning processes, and deliver immediate, personalized feedback at scale.
 
-This work addresses these limitations through a platform that exposes instructor-authored Python functions as HTTP endpoints. The system supports multiple computational domains including numerical methods, optimization, graph algorithms, Monte Carlo simulations, and differential equations. Interaction logging enables monitoring and analysis of student learning patterns and algorithmic exploration strategies.
+This work presents a platform that exposes Python functions as HTTP endpoints for educational use. The current implementation includes basic functions across several areas: mathematical operations, simple optimization problems, graph traversal helpers, Monte Carlo sampling, and basic examples for differential equations. All function calls are logged for analysis.
 
 ---
 
@@ -97,32 +97,38 @@ The platform uses unified authentication across all experiments:
 
 ## 3. Computational Domains and Pedagogical Applications
 
-**3.1 Mathematical Analysis and Numerical Methods**
+**3.1 Current Function Library**
 
-The platform supports interactive exploration of classical numerical algorithms:
+The platform includes simple computational functions across several experiments:
 
-- **Root-finding:** Students compare convergence behavior of bisection, Newton-Raphson, and secant methods, investigating how function properties and initial conditions affect algorithmic performance
-- **Multidimensional optimization:** JAX-accelerated automatic differentiation enables real-time gradient descent exploration on complex landscapes with immediate convergence visualization
-- **Differential equations:** Configurable Euler method implementation demonstrates step-size effects on solution accuracy and numerical stability
-- **Linear algebra:** Power method experiments reveal eigenvalue computation dynamics and convergence characteristics
+- **Basic mathematics:** Square, cubic, and quadratic functions for algorithm exploration
+- **Optimization:** Rosenbrock function for testing optimization approaches  
+- **Graph algorithms:** Neighbor-finding functions for 5x5 grid traversal
+- **Monte Carlo:** Random point generation and circle inclusion testing for pi estimation
+- **Differential equations:** Simple derivative function for Euler method exploration
+- **Linear algebra:** Basic matrix multiplication function
 
-**3.2 Discrete Algorithms and Graph Theory**
+**3.2 Educational Interaction Model**
 
-Fundamental computer science algorithms become tangible through interactive exploration:
+Students interact with functions through HTTP calls:
 
-- **Graph traversal:** BFS and DFS implementations on structured 5×5 grids enable direct observation of algorithmic differences in search patterns and data structure behavior
-- **Algorithmic complexity:** Students empirically investigate performance characteristics by varying problem parameters and observing execution patterns
+- **Function calls:** Students invoke functions with different parameters to explore behavior
+- **Logging:** All function calls, parameters, results, and errors are recorded
+- **Multiple clients:** Students can use Python scripts, command-line tools, or potentially Jupyter notebooks
+- **Real-time feedback:** Immediate function results enable iterative exploration
 
-**3.3 Stochastic Methods and Computational Statistics**
+**3.3 Assessment and Monitoring**
 
-- **Monte Carlo simulation:** Pi estimation through geometric probability demonstrates stochastic convergence with real-time accuracy tracking
-- **Statistical meta-analysis:** Logging infrastructure enables analysis of student exploration patterns and algorithmic choice distributions
+- **Quiz system:** One experiment (quizlab) includes Markdown-based quizzes with LaTeX math support
+- **Interaction logs:** Comprehensive logging enables instructors to review student exploration patterns
+- **Dashboard UI:** Web interfaces provide access to functions and basic monitoring
 
-**3.4 Assessment Integration and Real-Time Analytics**
+**3.4 Technical Infrastructure**
 
-- **Live assessment:** Markdown-authored quizzes with LaTeX mathematical notation integrate seamlessly with function call infrastructure
-- **Instructor dashboards:** Real-time visibility into student exploration patterns, algorithmic choices, and conceptual difficulties
-- **Learning analytics:** Persistent logging enables individual trajectory tracking and class-wide understanding evolution
+- **Data storage:** DuckDB database for interaction logging and analytics
+- **Web framework:** FastAPI-based server with RESTful endpoints
+- **Authentication:** Unified login system across all experiments
+- **Experiment isolation:** Each experiment has its own function namespace and data
 
 **3.5 Multi-Modal Client Architecture**
 
@@ -143,43 +149,43 @@ This flexibility allows students to engage through their preferred computational
 
 ## 4. Evaluation Framework and Empirical Results
 
-**4.1 Deployment Methodology**
+**4.1 Planned Evaluation Methodology**
 
-Initial implementations across diverse computational curricula employed mixed-methods evaluation combining quantitative interaction analytics with qualitative learning assessment:
+We propose a mixed-methods evaluation framework to assess the platform's educational effectiveness across diverse computational curricula:
 
-**4.2 Engagement and Exploration Patterns**
+**4.2 Student Engagement Analysis**
 
-Analysis of interaction logs from pilot deployments shows changes in student behavior:
+Planned metrics for analyzing interaction logs include:
 
-- **Exploration patterns:** Students made more function calls per session compared to traditional assignments
-- **Cross-domain usage:** Students used multiple experiment types within single sessions
-- **Session length:** Interactive sessions showed increased engagement duration
-- **Error correction:** Real-time feedback appeared to reduce time spent on errors
+- **Exploration patterns:** Function call frequency and parameter variation strategies
+- **Cross-domain usage:** Student transitions between different algorithmic experiments
+- **Session duration:** Time spent on algorithmic exploration tasks
+- **Error patterns:** Analysis of mistakes and correction strategies
 
 **4.3 Learning Outcomes Assessment**
 
-Pre/post evaluation using computational thinking assessments shows:
+Proposed pre/post evaluation using computational thinking assessments:
 
-- **Problem decomposition:** Improvement in breaking down algorithmic problems
-- **Behavioral prediction:** Increased ability to anticipate algorithm performance
-- **Knowledge transfer:** Some evidence of applying concepts across different algorithmic domains
+- **Problem decomposition:** Ability to break down algorithmic problems
+- **Behavioral prediction:** Skills in anticipating algorithm performance
+- **Knowledge transfer:** Application of concepts across different algorithmic domains
 
-**4.4 Instructor Adoption and Usability**
+**4.4 Instructor Experience Evaluation**
 
-Instructor feedback indicates positive response to platform characteristics:
+Planned instructor feedback collection on:
 
-- **Setup time:** Deployment was faster than traditional lab configuration
-- **Content creation:** Instructors could create new experiments efficiently
-- **Monitoring:** Instructors reported better visibility into student activity during class
+- **Setup time:** Deployment efficiency compared to traditional lab configuration
+- **Content creation:** Ease of developing new computational experiments
+- **Classroom monitoring:** Visibility into student learning during live sessions
 
-**4.5 Future Directions and Platform Evolution**
+**4.5 Implementation and Evaluation Timeline**
 
-Ongoing development focuses on three primary areas:
+Current platform status and planned evaluation:
 
-- **Advanced visualization:** Algorithm convergence animations, multi-dimensional parameter space exploration, and interactive optimization landscape rendering
-- **Intelligent analytics:** Machine learning-driven pattern recognition for automatic identification of student misconceptions and learning trajectory clustering
-- **Ecosystem integration:** LMS connectivity and gradebook synchronization while maintaining deployment autonomy
-- **Algorithm expansion:** Integration of advanced computational domains including machine learning, scientific computing, and computational geometry
+- **Technical foundation:** Core platform with 9 computational domains implemented
+- **Deployment readiness:** System ready for classroom trials in upcoming academic term
+- **Data collection framework:** Interaction logging and analytics infrastructure complete
+- **Future development:** Additional computational domains and analytics features planned based on evaluation results
 
 ---
 
@@ -187,26 +193,27 @@ Ongoing development focuses on three primary areas:
 
 **5.1 Technical Contributions**
 
-This work presents a platform approach that addresses some trade-offs between educational goals and implementation complexity. Key technical features include:
+This work presents a simple platform for exposing computational functions to students via HTTP. Key features include:
 
 - **Unified authentication architecture** reducing cognitive load while maintaining security isolation
 - **Language-agnostic API design** enabling diverse client ecosystem integration
 - **Real-time analytics infrastructure** providing immediate instructional feedback at scale
 - **Modular experiment architecture** supporting independent content development and deployment
+- **Standard experiment templates** enabling instructors to rapidly create new labs and experiments through drag-and-drop functionality
 
 **5.2 Pedagogical Impact**
 
-Evaluation across 9 computational domains shows improvements in student engagement and learning outcomes. The platform's ability to capture granular interaction data provides insight into algorithmic learning processes, revealing patterns not easily visible in traditional assessment approaches.
+The platform is designed to support evaluation across 9 computational domains. The interaction logging capability will enable analysis of student engagement patterns and algorithmic learning processes that are not easily visible in traditional assessment approaches.
 
-**5.3 Educational Technology Access**
+**5.3 Open Source Implementation**
 
-By open-sourcing this platform, we provide an alternative approach to computational education tools. The system's modest infrastructure requirements may enable adoption in various institutional contexts.
+The platform is available as open-source software. The system uses standard web technologies (FastAPI, DuckDB) and can be deployed locally or on institutional servers.
 
 **5.4 Research Implications**
 
 The comprehensive interaction logging infrastructure creates new opportunities for computational education research. Fine-grained behavioral data enables investigation of learning transfer between algorithmic domains, identification of common misconception patterns, and development of adaptive instructional interventions.
 
-**Platform Status:** Current implementation includes 9 experiment environments covering numerical analysis, discrete algorithms, optimization, differential equations, linear algebra, and stochastic methods, with unified authentication across all experiments.
+**Platform Status:** Current implementation includes 9 experiments with basic functions: mathematical operations (square, cubic, quadratic), the Rosenbrock function, graph grid navigation helpers, Monte Carlo sampling functions, simple differential equation examples, and basic matrix operations. The system includes unified authentication and logging infrastructure.
 
 ---
 
