@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monte Carlo Function Area Visualization</title>
+    <link rel="stylesheet" href="style/main.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@marimo-team/marimo-snippets@1"></script>
+    <style>
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        .back-btn {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .back-btn:hover {
+            background: #545b62;
+        }
+        .notebook-section {
+            margin-bottom: 40px;
+        }
+        .notebook-title {
+            color: #e0e0e0;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+    </style>
+</head>
+<body class="page-centered">
+    <div class="container">
+        <div class="header">
+            <h1 style="margin:0; color: #e0e0e0;">Monte Carlo Function Area Visualization</h1>
+            <a href="dashboard.html" class="back-btn">Back to Dashboard</a>
+        </div>
+
+        <div class="notebook-section">
+            <h2 class="notebook-title">Function Integration Visualization</h2>
+            <marimo-iframe data-theme="dark" data-height="720px">
+                <pre><code class="language-python">import json
+import marimo as mo
+import matplotlib.pyplot as plt
+import numpy as np
+import requests as req
+                </code></pre>
+
+                <pre><code class="language-python">mo.md("""
+## Monte Carlo Function Integration Visualization
+
+1. Ensure a function is defined in the Function tab.
+2. Use the "Uniform Sample in Function on [-1, 1]" page to generate samples for the class under a shared trial name.
+3. Fill in the trial below (student ID is optional metadata) and run the log fetch cell.
+4. Run the plotting cell to view the sampled points, highlighting those under the function curve.
+5. Review the under/over ratio and observe how the estimate converges toward the function's integral.
+
+Run the cells from top to bottom after updating any parameters.
+""")</code></pre>
+
+                <pre><code class="language-python"># Configure log query parameters
+trial_input = mo.ui.text(
+    value="",
+    placeholder="e.g. func-lesson-1",
+    label="Trial tag"
+)
+
+count_input = mo.ui.number(
+    value=200,
+    start=1,
+    stop=10000,
+    step=1,
+    label="Number of logs (n)"
+)
+
+order_input = mo.ui.dropdown(
+    options=["latest", "earliest"],
+    value="latest",
+    label="Order"
+)
+
+mo.vstack([
+    mo.md("**Log Fetch Parameters**"),
+    trial_input,
+    mo.hstack([count_input, order_input])
+])
+                </code></pre>
+
+                <pre><code class="language-python"># Load current function definition
+try:
+    # In a real implementation, this would come from the server
+    # For now, we'll use a placeholder function
+    current_function_expr = "Math.sin(x) + 2"  # This should be loaded from server/localStorage
+    
+    def current_function(x):
+        # Convert JavaScript Math syntax to Python
+        expr = current_function_expr.replace('Math.sin', 'np.sin').replace('Math.cos', 'np.cos').replace('Math.exp', 'np.exp').replace('Math.sqrt', 'np.sqrt')
+        return eval(expr)
+    
+    # Test the function
+    test_x = np.linspace(-1, 1, 10)
+    test_y = [current_function(x) for x in test_x]
+    
+    mo.md(f"**Current Function:** `{current_function_expr}`")
+except Exception as e:
+    mo.md(f"**Error loading function:** {str(e)}")
+    current_function = lambda x: x*x + 1  # fallback
+    current_function_expr = "x*x + 1"
+                </code></pre>
+
+                <pre><code class="language-python"># Fetch logs from the server
+_ = refresh_button.value
+params = {"n": count_input.value, "order": order_input.value}
+if trial_input.value:
+    params["trial"] = trial_input.value
+
+response = req.get("http://localhost:9000/logs", params=params)
+response.raise_for_status()
+logs = response.json().get("logs", [])
+print(f"Fetched {len(logs)} logs")
+                </code></pre>
+
+                <pre><code class="language-python"># Refresh plot and log retrieval
+refresh_button = mo.ui.refresh(
+    default_interval="1s",
+)
+
+refresh_button
+                </code></pre>
+
+                <pre><code class="language-python"># Extract Monte Carlo points from logs for function integration
+def extract_function_point(entry):
+    args = entry.get("args_json", [])
+    if isinstance(args, str):
+        try:
+            args = json.loads(args)
+        except json.JSONDecodeError:
+            return None
+
+    if not isinstance(args, list) or not args:
+        return None
+
+    payload = args[0]
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except json.JSONDecodeError:
+            return None
+
+    if not isinstance(payload, dict):
+        return None
+
+    # Look for function integration points (different kind than circle)
+    if payload.get("kind") != "func_pm":
+        return None
+
+    value = payload.get("value")
+    if not (isinstance(value, (list, tuple)) and len(value) == 2):
+        return None
+
+    try:
+        x = float(value[0])
+        y = float(value[1])
+    except (TypeError, ValueError):
+        return None
+
+    return x, y
+
+
+points = [pt for log in logs if (pt := extract_function_point(log)) is not None]
+
+# Calculate which points are under the function curve
+under_mask = []
+for x, y in points:
+    try:
+        func_value = current_function(x)
+        under_mask.append(y <= func_value)
+    except:
+        under_mask.append(False)
+
+under = sum(under_mask)
+total = len(points)
+ratio = (under / total) if total else 0
+
+print(f"Processed {len(points)} Monte Carlo function points")
+print(f"Under curve: {under}, Total: {total}, Ratio: {ratio:.4f}")
+                </code></pre>
+
+                <pre><code class="language-python"># Plot sampled points against the function curve
+_ = refresh_button.value
+plot = plt.figure(figsize=(10, 8))
+ax = plt.gca()
+ax.set_xlim(-1.1, 1.1)
+
+# Plot the function curve
+x_func = np.linspace(-1, 1, 200)
+try:
+    y_func = [current_function(x) for x in x_func]
+    max_y = max(y_func) * 1.1
+    ax.set_ylim(0, max_y)
+    
+    # Fill area under the function
+    ax.fill_between(x_func, 0, y_func, alpha=0.3, color='#22d3ee', label='Function area')
+    ax.plot(x_func, y_func, color='#22d3ee', linewidth=2, label=f'f(x) = {current_function_expr}')
+    
+except Exception as e:
+    max_y = 5
+    ax.set_ylim(0, max_y)
+    ax.text(0, max_y/2, f'Error plotting function: {str(e)}', ha='center', va='center', color='#f87171', fontsize=12)
+
+# Draw boundary rectangle
+ax.plot([-1, 1, 1, -1, -1], [0, 0, max_y, max_y, 0], color='#94a3b8', linewidth=1.2, label='Sample boundary')
+
+if points:
+    pts = np.array(points)
+    under_pts = pts[np.array(under_mask)]
+    over_pts = pts[~np.array(under_mask)]
+
+    if len(under_pts):
+        ax.scatter(under_pts[:, 0], under_pts[:, 1], c='#34d399', label=f'Under curve ({len(under_pts)})', alpha=0.8, s=20)
+    if len(over_pts):
+        ax.scatter(over_pts[:, 0], over_pts[:, 1], c='#f87171', label=f'Over curve ({len(over_pts)})', alpha=0.8, s=20)
+else:
+    plt.text(0, max_y/2, 'No function integration points found', ha='center', va='center', color='#e5e7eb', fontsize=14)
+
+plt.title('Monte Carlo Function Integration')
+plt.xlabel('x')
+plt.ylabel('y')
+plt.grid(alpha=0.2)
+plt.legend(loc='upper right')
+                </code></pre>
+
+                <pre><code class="language-python"># Calculate integral estimate
+if points and total > 0:
+    # The integral estimate is: (area of rectangle) * (ratio of points under curve)
+    # Rectangle area = width * height = 2 * max_y
+    try:
+        rectangle_area = 2 * max_y  # width=2, height=max_y
+        integral_estimate = rectangle_area * ratio
+        
+        # Calculate theoretical integral for comparison (if possible)
+        try:
+            x_theory = np.linspace(-1, 1, 1000)
+            y_theory = [current_function(x) for x in x_theory]
+            theoretical_integral = np.trapz(y_theory, x_theory)
+        except:
+            theoretical_integral = None
+        
+        mo.vstack([
+            mo.md(f"**Under curve points:** {under}"),
+            mo.md(f"**Total points:** {total}"),
+            mo.md(f"**Ratio under curve:** {ratio:.4f}"),
+            mo.md(f"**Estimated integral:** {integral_estimate:.4f}"),
+            mo.md(f"**Theoretical integral (numerical):** {theoretical_integral:.4f}" if theoretical_integral is not None else "**Theoretical integral:** Not calculated")
+        ])
+    except Exception as e:
+        mo.md(f"**Error calculating integral:** {str(e)}")
+else:
+    mo.vstack([
+        mo.md("**Under curve points:** 0"),
+        mo.md("**Total points:** 0"),
+        mo.md("**No data available for integral estimation**")
+    ])
+                </code></pre>
+            </marimo-iframe>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = window.location.origin;
+
+        // Require authentication to view dashboard
+        (async () => {
+            try {
+                const resp = await fetch(`${API_BASE_URL}/admin/ping`, { credentials: 'include' });
+                if (!resp.ok) {
+                    window.location.href = 'login.html';
+                }
+            } catch (e) {
+                window.location.href = 'login.html';
+            }
+        })();
+    </script>
+</body>
+</html>

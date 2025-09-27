@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Root Finding - Students</title>
+    <link rel="stylesheet" href="style/main.css" />
+</head>
+<body>
+
+    <div id="notification-container"></div>
+
+    <div class="container">
+
+        <main>
+            <div class="toolbar" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                <a href="dashboard.html">← Back to Root Finding Dashboard</a>
+                <div style="flex:1"></div>
+                <span class="badge" id="active-badge">Active: …</span>
+            </div>
+            <div id="status-banner" style="display:none; margin: 6px 0 12px 0;"></div>
+            <details class="collapsible">
+                <summary class="collapsible-summary">Bulk Upload (CSV)</summary>
+                <div class="content-section">
+                    <p class="text-muted mb-12">
+                        Upload a CSV with headers: <code>sid</code>, <code>name</code> and optional <code>email</code>.
+                    </p>
+                    <div class="form-row ai-center gap-10">
+                        <input type="file" id="csv-file" accept=".csv,text/csv" class="text-light" />
+                        <button type="button" id="csv-parse-btn" class="btn" disabled>Preview</button>
+                        <button type="button" id="csv-upload-btn" class="btn" disabled>Register</button>
+                    </div>
+                    <div id="csv-summary" class="mt-12 text-sm text-muted"></div>
+                    <div id="csv-errors" class="mt-8 text-xs text-error"></div>
+                </div>
+            </details>
+
+            <details class="collapsible">
+                <summary class="collapsible-summary">Add New Student</summary>
+                <div class="content-section">
+                    <form id="add-student-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="student-id">Student ID</label>
+                            <input type="text" id="student-id" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="name">Name (Required)</label>
+                            <input type="text" id="name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="email">Email (Optional)</label>
+                            <input type="email" id="email">
+                        </div>
+                        <button type="submit" class="btn">Add Student</button>
+                    </div>
+                    </form>
+                </div>
+            </details>
+
+            <div class="content-section">
+                <h2>Student List</h2>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Student ID</th>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="student-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const API_BASE_URL = window.location.origin;
+        const expMatch = window.location.pathname.match(/\/exp\/([^\/]+)/);
+        const expPrefix = expMatch ? `/exp/${expMatch[1]}` : '';
+
+        const studentTableBody = document.getElementById('student-table-body');
+        const addStudentForm = document.getElementById('add-student-form');
+        const notificationContainer = document.getElementById('notification-container');
+        const csvFileInput = document.getElementById('csv-file');
+        const csvParseBtn = document.getElementById('csv-parse-btn');
+        const csvUploadBtn = document.getElementById('csv-upload-btn');
+        const csvSummary = document.getElementById('csv-summary');
+        const csvErrors = document.getElementById('csv-errors');
+        const expScope = document.getElementById('exp-scope');
+
+        const getApiUrl = (path) => `${API_BASE_URL}${path}`; // Use root endpoints (bound to active experiment)
+        if (expScope) expScope.remove();
+        let ACTIVE_NAME = null;
+        async function refreshActive(){
+            try{ const r=await fetch(`${API_BASE_URL}/api/active-experiment`); const d=await r.json(); ACTIVE_NAME = d.active || null; document.getElementById('active-badge').textContent = `Active: ${ACTIVE_NAME || 'none'}`; }
+            catch{ ACTIVE_NAME = null; document.getElementById('active-badge').textContent='Active: ?'; }
+        }
+
+        // Show/hide admin sections based on auth
+        let IS_ADMIN = false;
+        async function checkAdmin() {
+            try {
+                const resp = await fetch(getApiUrl('/admin/ping'), { credentials: 'include' });
+                IS_ADMIN = resp.ok;
+            } catch (_) { IS_ADMIN = false; }
+            document.querySelectorAll('.collapsible').forEach(el => el.style.display = IS_ADMIN ? '' : 'none');
+        }
+
+        // Inline status banner helpers
+        const statusBanner = document.getElementById('status-banner');
+        function setBanner(text, type){
+            if (!statusBanner) return;
+            statusBanner.textContent = text;
+            statusBanner.className = `notification-message ${type}`;
+            statusBanner.style.display = 'block';
+        }
+        function clearBanner(){ if(statusBanner){ statusBanner.style.display='none'; statusBanner.textContent=''; } }
+        function updateBanner(){
+            if (!IS_ADMIN){ setBanner('Login required to add or view students. Click Login on the dashboard.', 'error'); return; }
+            if (!ACTIVE_NAME){ setBanner('No active experiment. Open the landing page and Launch one.', 'warning'); return; }
+            clearBanner();
+        }
+
+        const fetchStudents = async () => {
+            try {
+                const response = await fetch(getApiUrl('/admin/students'), { credentials: 'include' });
+                if (response.status === 401) { showMessage('Login required to view students.', 'error'); return; }
+                if (response.status === 409) { showMessage('No active experiment. Start one from the landing page.', 'error'); return; }
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const data = await response.json();
+                studentTableBody.innerHTML = '';
+                if (data.students && data.students.length > 0) {
+                    data.students.forEach(student => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${student.student_id}</td>
+                            <td>${student.name}</td>
+                            <td>${student.email || 'N/A'}</td>
+                            <td>
+                                <button class="btn-delete" data-id="${student.student_id}">Delete</button>
+                                <button class="btn btn-warning btn-delete-logs" data-id="${student.student_id}" title="Delete all logs for this student">Clear Logs</button>
+                            </td>
+                        `;
+                        studentTableBody.appendChild(row);
+                    });
+                } else {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `<td colspan="4" style="text-align:center;">No students found.</td>`;
+                    studentTableBody.appendChild(row);
+                }
+            } catch (error) {
+                console.error('Error fetching students:', error);
+                showMessage('Failed to fetch students. Is the server running?', 'error');
+            }
+        };
+
+        const fetchExistingStudents = async () => {
+            const response = await fetch(getApiUrl('/admin/students'), { credentials: 'include' });
+            if (response.status === 401) { showMessage('Login required to view students.', 'error'); return null; }
+            if (response.status === 409) { showMessage('No active experiment. Start one from the landing page.', 'error'); return null; }
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            const data = await response.json();
+            const set = new Set();
+            (data.students || []).forEach(s => s?.student_id && set.add(String(s.student_id)));
+            return set;
+        };
+
+        async function extractErrorMessage(resp) {
+            try {
+                const data = await resp.json();
+                if (data && data.detail !== undefined) {
+                    return (typeof data.detail === 'string') ? data.detail : JSON.stringify(data.detail);
+                }
+            } catch (_) { /* ignore */ }
+            try { return await resp.text(); } catch (_) { return ''; }
+        }
+
+        const addStudent = async (event) => {
+            event.preventDefault();
+            const studentId = document.getElementById('student-id').value.trim();
+            const name = document.getElementById('name').value.trim();
+            const email = document.getElementById('email').value.trim();
+            if (!studentId || !name) { showMessage('Student ID and Name are required.', 'error'); return; }
+            const studentData = { student_id: studentId, name };
+            if (email) { studentData.email = email; }
+            try {
+                const response = await fetch(getApiUrl('/admin/add-student'), {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(studentData)
+                , credentials: 'include' });
+                if (response.status === 401) { window.location.href = 'login.html'; return; }
+                if (response.status === 409) { showMessage('No active experiment. Start one from the landing page.', 'error'); return; }
+                if (!response.ok) {
+                    const detail = await extractErrorMessage(response);
+                    throw new Error(detail || `HTTP ${response.status}`);
+                }
+                showMessage('Student added successfully!', 'success');
+                addStudentForm.reset();
+                fetchStudents();
+            } catch (error) {
+                console.error('Error adding student:', error);
+                showMessage(`Error: ${error.message}`, 'error');
+            }
+        };
+
+        const MAX_CSV_ROWS = 5000;
+        function showCsvError(msg) { csvErrors.textContent = msg; }
+        function clearCsvMessages() { csvSummary.textContent = ''; csvErrors.textContent = ''; }
+        function enableCsvButtons(parseEnabled, uploadEnabled) { csvParseBtn.disabled = !parseEnabled; csvUploadBtn.disabled = !uploadEnabled; }
+
+        function parseCSV(text) {
+            const rows = []; let cur = []; let field = ''; let i = 0; let inQuotes = false;
+            const pushField = () => { cur.push(field); field = ''; };
+            const pushRow = () => { rows.push(cur); cur = []; };
+            while (i < text.length) {
+                const ch = text[i];
+                if (inQuotes) {
+                    if (ch === '"') { if (text[i+1] === '"') { field += '"'; i += 2; continue; } inQuotes = false; i++; continue; }
+                    else { field += ch; i++; continue; }
+                } else {
+                    if (ch === '"') { inQuotes = true; i++; continue; }
+                    if (ch === ',') { pushField(); i++; continue; }
+                    if (ch === '\n') { pushField(); pushRow(); i++; continue; }
+                    if (ch === '\r') { if (text[i+1] === '\n') { i++; } pushField(); pushRow(); i++; continue; }
+                    field += ch; i++; continue;
+                }
+            }
+            pushField();
+            if (cur.length > 1 || (cur.length === 1 && cur[0].trim() !== '')) rows.push(cur);
+            return rows;
+        }
+        function stripBOM(s) { return s.charCodeAt(0) === 0xFEFF ? s.slice(1) : s; }
+
+        let parsedUpload = null;
+        async function handleCsvParse() {
+            clearCsvMessages(); parsedUpload = null;
+            const file = csvFileInput.files && csvFileInput.files[0];
+            if (!file) { showCsvError('Please choose a CSV file.'); enableCsvButtons(true, false); return; }
+            if (file.size > 5 * 1024 * 1024) { showCsvError('File too large (limit 5MB).'); enableCsvButtons(true, false); return; }
+            const text = await file.text();
+            const rows = parseCSV(stripBOM(text));
+            if (!rows.length) { showCsvError('Empty CSV.'); enableCsvButtons(true, false); return; }
+            const headers = rows[0].map(h => String(h || '').trim().toLowerCase());
+            const idxSid = headers.indexOf('sid');
+            const idxName = headers.indexOf('name');
+            const idxEmail = headers.indexOf('email');
+            if (idxSid === -1 || idxName === -1) { showCsvError('Missing required headers: sid and name'); enableCsvButtons(true, false); return; }
+            const bodyRows = rows.slice(1);
+            if (bodyRows.length > MAX_CSV_ROWS) { showCsvError(`Too many rows (${bodyRows.length}). Limit is ${MAX_CSV_ROWS}.`); enableCsvButtons(true, false); return; }
+            const issues = []; const withinFile = new Set(); const cleaned = [];
+            for (let r = 0; r < bodyRows.length; r++) {
+                const cols = bodyRows[r];
+                if (!cols || cols.every(c => String(c||'').trim() === '')) continue;
+                const sid = String((cols[idxSid] ?? '')).trim();
+                const name = String((cols[idxName] ?? '')).trim();
+                const email = idxEmail !== -1 ? String((cols[idxEmail] ?? '')).trim() : '';
+                if (!sid) { issues.push(`Row ${r+2}: Missing sid`); continue; }
+                if (!name) { issues.push(`Row ${r+2}: Missing name`); continue; }
+                if (withinFile.has(sid)) { issues.push(`Row ${r+2}: Duplicate sid within file (${sid})`); continue; }
+                withinFile.add(sid);
+                cleaned.push({ student_id: sid, name, email: email || undefined });
+            }
+            let existingSet = await fetchExistingStudents(); if (existingSet === null) return;
+            const toAdd = []; const skippedExisting = [];
+            cleaned.forEach(s => { if (existingSet.has(s.student_id)) skippedExisting.push(s.student_id); else toAdd.push(s); });
+            const summary = [ `Rows read: ${bodyRows.length}`, `Valid in file: ${cleaned.length}`, `Existing skipped: ${skippedExisting.length}`, `To register: ${toAdd.length}` ].join(' | ');
+            csvSummary.textContent = summary;
+            if (issues.length) { csvErrors.innerHTML = issues.slice(0, 50).map(e => `• ${e}`).join('<br>') + (issues.length > 50 ? `<br>...and ${issues.length-50} more.` : ''); }
+            parsedUpload = { toAdd };
+            enableCsvButtons(true, toAdd.length > 0);
+        }
+
+        async function handleCsvUpload() {
+            if (!parsedUpload || !parsedUpload.toAdd?.length) { showCsvError('No valid rows to upload.'); return; }
+            csvErrors.textContent = ''; csvUploadBtn.disabled = true; csvParseBtn.disabled = true;
+            let success = 0, failed = 0; const total = parsedUpload.toAdd.length;
+            const updateProgress = () => { csvSummary.textContent = `Registering ${success+failed}/${total}... Success: ${success}, Failed: ${failed}`; };
+            updateProgress();
+            for (const s of parsedUpload.toAdd) {
+                try {
+                    const resp = await fetch(getApiUrl('/admin/add-student'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(s) });
+                    if (resp.status === 401) { window.location.href = 'login.html'; return; }
+                    if (!resp.ok) { failed++; } else { success++; }
+                } catch (e) { failed++; }
+                updateProgress();
+            }
+            csvSummary.textContent = `Completed. Success: ${success}, Failed: ${failed}`;
+            if (failed > 0) { showMessage('Some rows failed to register. Check CSV and try again.', 'error'); }
+            else { showMessage('All students registered successfully!', 'success'); }
+            parsedUpload = null; csvUploadBtn.disabled = true; csvParseBtn.disabled = false; csvFileInput.value = '';
+            fetchStudents();
+        }
+
+        csvFileInput.addEventListener('change', () => { clearCsvMessages(); enableCsvButtons(!!csvFileInput.files.length, false); });
+        csvParseBtn.addEventListener('click', handleCsvParse);
+        csvUploadBtn.addEventListener('click', handleCsvUpload);
+
+        const deleteStudent = async (studentId) => {
+            if (!confirm(`Are you sure you want to delete student ${studentId}? This action cannot be undone.`)) return;
+            try {
+                const response = await fetch(getApiUrl(`/admin/student/${studentId}`), { method: 'DELETE', credentials: 'include' });
+                if (response.status === 401) { window.location.href = 'login.html'; return; }
+                if (response.status === 409) { showMessage('No active experiment. Start one from the landing page.', 'error'); return; }
+                if (!response.ok) { const detail = await extractErrorMessage(response); throw new Error(detail || `HTTP ${response.status}`); }
+                showMessage('Student deleted successfully!', 'warning');
+                fetchStudents();
+            } catch (error) { console.error('Error deleting student:', error); showMessage(`Error: ${error.message}`, 'error'); }
+        };
+
+        const showMessage = (message, type) => {
+            const msgElement = document.createElement('div');
+            msgElement.classList.add('notification-message', type);
+            msgElement.textContent = message;
+            notificationContainer.appendChild(msgElement);
+            setTimeout(() => { msgElement.style.opacity = '0'; setTimeout(() => { msgElement.remove(); }, 300); }, 4000);
+        };
+
+        document.addEventListener('DOMContentLoaded', async () => { await refreshActive(); await checkAdmin(); updateBanner(); await fetchStudents(); });
+        addStudentForm.addEventListener('submit', addStudent);
+        studentTableBody.addEventListener('click', async (event) => {
+            const t = event.target;
+            if (t.classList.contains('btn-delete')) { deleteStudent(t.dataset.id); return; }
+            if (t.classList.contains('btn-delete-logs')) {
+                const studentId = t.dataset.id;
+                if (!confirm(`Delete ALL logs for student ${studentId}? This cannot be undone.`)) return;
+                try {
+                    const resp = await fetch(getApiUrl(`/admin/logs/student/${studentId}`), { method: 'DELETE', credentials: 'include' });
+                    if (resp.status === 401) { showMessage('Login required to manage logs.', 'error'); return; }
+                    if (resp.status === 409) { showMessage('No active experiment. Start one from the landing page.', 'error'); return; }
+                    if (!resp.ok) { const detail = await extractErrorMessage(resp); throw new Error(detail || `HTTP ${resp.status}`); }
+                    const data = await resp.json();
+                    showMessage(`Cleared ${data.deleted ?? 0} logs for ${studentId}.`, 'warning');
+                } catch (e) {
+                    console.error('Error deleting logs:', e);
+                    showMessage(`Error: ${e.message || e}`, 'error');
+                }
+            }
+        });
+    </script>
+    <script src="scripts/theme.js"></script>
+
+</body>
+</html>

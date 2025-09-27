@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Power Method Visualization</title>
+    <link rel="stylesheet" href="style/main.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@marimo-team/marimo-snippets@1"></script>
+    <style>
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        .back-btn {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .back-btn:hover {
+            background: #545b62;
+        }
+        .notebook-section {
+            margin-bottom: 40px;
+        }
+        .notebook-title {
+            color: #e0e0e0;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+    </style>
+</head>
+<body class="page-centered">
+    <div class="container">
+        <div class="header">
+            <h1 style="margin:0; color: #e0e0e0;">Power Method</h1>
+            <a href="dashboard.html" class="back-btn">Back to Dashboard</a>
+        </div>
+
+        <div class="notebook-section">
+            <h2 class="notebook-title">Instructor Visualization</h2>
+            <marimo-iframe data-theme="dark" data-height="600px">
+                <pre><code class="language-python">import marimo as mo
+import requests as req
+import numpy as np
+import json
+import matplotlib.pyplot as plt</code></pre>
+
+                <pre><code class="language-python"># Instructor instructions
+mo.md("""
+## Visualization Guide
+
+1. Select the student and activity focus below.
+2. Fetch logs to retrieve recorded power-method calls.
+3. Run the analysis cell to visualise eigenvalue estimates and residuals.
+4. Compare convergence against the true dominant eigenvalue (-4).
+""")</code></pre>
+
+                <pre><code class="language-python"># Log fetch parameters
+student_id_input = mo.ui.text(
+    value="",
+    placeholder="Enter student ID",
+    label="Student ID (sid):"
+)
+
+trial_input = mo.ui.text(
+    value="",
+    placeholder="Enter trial name (e.g., power-method-demo)",
+    label="Trial Name:"
+)
+
+count_input = mo.ui.number(
+    value=20,
+    start=1,
+    stop=200,
+    step=1,
+    label="Number of logs (n):"
+)
+
+order_input = mo.ui.dropdown(
+    options=["latest", "earliest"],
+    value="latest",
+    label="Order:"
+)
+
+mo.vstack([
+    mo.md("**Log Fetch Parameters:**"),
+    trial_input,
+    student_id_input,
+    mo.hstack([count_input, order_input])
+])</code></pre>
+
+                <pre><code class="language-python"># Fetch logs from the server
+params = {
+    "sid": student_id_input.value,
+    "trial": trial_input.value,
+    "n": count_input.value,
+    "order": order_input.value,
+}
+response = req.get("http://localhost:9000/logs", params=params)
+response.raise_for_status()
+logs = response.json().get("logs", [])
+print(f"Fetched {len(logs)} logs")</code></pre>
+
+                <pre><code class="language-python"># Debug and plot the results
+print(f"Total logs: {len(logs)}")
+print("First few logs:")
+for i, log in enumerate(logs[:3]):
+    print(f"Log {i}: func_name={log.get('func_name')}, args_json={log.get('args_json')}, result_json={log.get('result_json')}")
+
+# Extract arguments and results from linear function calls
+args_data = []
+results_data = []
+
+for log in logs:
+    if log.get("func_name") == "linear":
+        print(f"Found linear call: args_json={log.get('args_json')}, result_json={log.get('result_json')}")
+
+        # Parse arguments and results - handle different formats
+        try:
+            args_json = log.get("args_json")
+            result_json = log.get("result_json")
+
+            # Handle string JSON
+            if isinstance(args_json, str):
+                args = json.loads(args_json)
+            else:
+                args = args_json
+
+            if isinstance(result_json, str):
+                result = json.loads(result_json)
+            else:
+                result = result_json
+
+            # Check if we have valid 2D vectors
+            if isinstance(args, list) and len(args) >= 1:
+                # Handle case where args is [[x, y]] or [x, y]
+                if isinstance(args[0], list) and len(args[0]) == 2:
+                    args_data.append(args[0])
+                elif len(args) == 2:
+                    args_data.append(args)
+
+            if isinstance(result, list) and len(result) == 2:
+                results_data.append(result)
+
+        except Exception as e:
+            print(f"Error parsing log: {e}")
+            continue
+
+print(f"Extracted {len(args_data)} arguments and {len(results_data)} results")
+
+# Create simple scatter plot
+plt.figure(figsize=(8, 6))
+
+if args_data and results_data:
+    # Plot input vectors
+    args_x = [point[0] for point in args_data]
+    args_y = [point[1] for point in args_data]
+    plt.scatter(args_x, args_y, alpha=0.1, label='Input vectors', color='blue', s=60)
+
+    # Plot output vectors  
+    results_x = [point[0] for point in results_data]
+    results_y = [point[1] for point in results_data]
+    plt.scatter(results_x, results_y, alpha=0.1, label='Output vectors', color='red', s=60)
+
+    vx,vy = args_data[0]
+
+    plt.xlabel('x coordinate')
+    plt.ylabel('y coordinate')
+    plt.title(f"Power Method: v = [{vx:.4f}, {vy:.4f}]")
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.show()
+
+    print(f"Plotted {len(args_data)} function calls")
+else:
+    print("No valid data found to plot")
+    if args_data:
+        print(f"Sample args: {args_data[:3]}")
+    if results_data:
+        print(f"Sample results: {results_data[:3]}")</code></pre>
+            </marimo-iframe>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = window.location.origin;
+
+        // Require authentication to view dashboard
+        (async () => {
+            try {
+                const resp = await fetch(`${API_BASE_URL}/admin/ping`, { credentials: 'include' });
+                if (!resp.ok) {
+                    window.location.href = 'login.html';
+                }
+            } catch (e) {
+                window.location.href = 'login.html';
+            }
+        })();
+    </script>
+</body>
+</html>

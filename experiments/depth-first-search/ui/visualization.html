@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Depth-First Search Visualization</title>
+    <link rel="stylesheet" href="style/main.css" />
+    <style>
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        .back-btn {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .back-btn:hover {
+            background: #545b62;
+        }
+        .controls-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: var(--surface-color);
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+        }
+        .controls-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .control-group label {
+            font-size: 14px;
+            color: var(--muted-color);
+        }
+        .control-group input, .control-group select {
+            padding: 8px 12px;
+            background: var(--background-color);
+            color: #e5e7eb;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+        }
+        .fetch-btn {
+            background: var(--primary-color);
+            color: var(--background-color);
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        .fetch-btn:hover {
+            opacity: 0.9;
+        }
+        .visualization-section {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        .graph-container {
+            background: var(--surface-color);
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .grid-graph {
+            display: grid;
+            grid-template-columns: repeat(5, 60px);
+            grid-template-rows: repeat(5, 60px);
+            gap: 2px;
+            margin: 20px 0;
+        }
+        .grid-cell {
+            width: 60px;
+            height: 60px;
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+            transition: all 0.3s ease;
+            font-size: 12px;
+        }
+        .grid-cell.unvisited {
+            background: #2c3e50;
+            color: #7f8c8d;
+        }
+        .grid-cell.visited {
+            background: #27ae60;
+            color: white;
+        }
+        .grid-cell.current {
+            background: #3498db;
+            color: white;
+            animation: pulse 1s infinite;
+        }
+        .grid-cell.start {
+            border-color: #f39c12;
+            border-width: 3px;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        .legend {
+            display: flex;
+            gap: 20px;
+            margin-top: 15px;
+            font-size: 14px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+        }
+        .log-controls {
+            background: var(--surface-color);
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            padding: 20px;
+        }
+        .log-navigation {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            align-items: center;
+        }
+        .nav-btn {
+            background: var(--primary-color);
+            color: var(--background-color);
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .nav-btn:hover {
+            opacity: 0.9;
+        }
+        .nav-btn:disabled {
+            background: var(--muted-color);
+            cursor: not-allowed;
+        }
+        .log-info {
+            background: var(--background-color);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .log-list {
+            max-height: 300px;
+            overflow-y: auto;
+            background: var(--background-color);
+            border-radius: 8px;
+            padding: 10px;
+        }
+        .log-entry {
+            padding: 8px;
+            margin-bottom: 5px;
+            background: var(--surface-2);
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .log-entry:hover {
+            background: var(--primary-color);
+            color: var(--background-color);
+        }
+        .log-entry.active {
+            background: var(--primary-color);
+            color: var(--background-color);
+        }
+        .status-text {
+            color: var(--muted-color);
+            font-style: italic;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body class="page-centered">
+    <div class="container">
+        <div class="header">
+            <h1 style="margin:0; color: #e0e0e0;">Depth-First Search Visualization</h1>
+            <a href="dashboard.html" class="back-btn">Back to Dashboard</a>
+        </div>
+
+        <div class="controls-section">
+            <h2 style="margin-top: 0; color: #e0e0e0;">Log Fetch Parameters</h2>
+            <div class="controls-grid">
+                <div class="control-group">
+                    <label for="student-id">Student ID:</label>
+                    <input type="text" id="student-id" placeholder="Enter student ID">
+                </div>
+                <div class="control-group">
+                    <label for="trial-name">Trial Name:</label>
+                    <input type="text" id="trial-name" placeholder="e.g., dfs-demo">
+                </div>
+                <div class="control-group">
+                    <label for="log-count">Number of logs:</label>
+                    <input type="number" id="log-count" value="50" min="1" max="200">
+                </div>
+                <div class="control-group">
+                    <label for="log-order">Order:</label>
+                    <select id="log-order">
+                        <option value="earliest">Earliest first</option>
+                        <option value="latest">Latest first</option>
+                    </select>
+                </div>
+            </div>
+            <button class="fetch-btn" onclick="fetchLogs()">Fetch Logs</button>
+            <div class="status-text" id="status-text">Enter parameters and click "Fetch Logs" to begin</div>
+        </div>
+
+        <div class="visualization-section">
+            <div class="graph-container">
+                <h3 style="margin-top: 0; color: #e0e0e0;">5x5 Grid Graph</h3>
+                <div class="grid-graph" id="grid-graph">
+                    <!-- Grid cells will be generated by JavaScript -->
+                </div>
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #2c3e50;"></div>
+                        <span>Unvisited</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #27ae60;"></div>
+                        <span>Visited</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #3498db;"></div>
+                        <span>Current</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: transparent; border: 2px solid #f39c12;"></div>
+                        <span>Start</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="log-controls">
+                <h3 style="margin-top: 0; color: #e0e0e0;">Log Navigation</h3>
+                <div class="log-navigation">
+                    <button class="nav-btn" id="first-btn" onclick="goToFirst()" disabled>First</button>
+                    <button class="nav-btn" id="prev-btn" onclick="goToPrevious()" disabled>Previous</button>
+                    <span id="log-position" style="color: var(--muted-color);">0 / 0</span>
+                    <button class="nav-btn" id="next-btn" onclick="goToNext()" disabled>Next</button>
+                    <button class="nav-btn" id="last-btn" onclick="goToLast()" disabled>Last</button>
+                </div>
+                
+                <div class="log-info" id="current-log-info">
+                    No logs loaded
+                </div>
+
+                <div class="log-list" id="log-list">
+                    <!-- Log entries will be populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = window.location.origin;
+        
+        let logs = [];
+        let currentLogIndex = -1;
+        let visitedCells = new Set();
+        let currentCell = null;
+        let startCell = null;
+
+        // Initialize the 5x5 grid
+        function initializeGrid() {
+            const gridContainer = document.getElementById('grid-graph');
+            gridContainer.innerHTML = '';
+            
+            for (let y = 0; y < 5; y++) {
+                for (let x = 0; x < 5; x++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'grid-cell unvisited';
+                    cell.id = `cell-${x}-${y}`;
+                    cell.textContent = `(${x},${y})`;
+                    gridContainer.appendChild(cell);
+                }
+            }
+        }
+
+        // Update grid visualization
+        function updateGrid() {
+            // Reset all cells to unvisited
+            for (let y = 0; y < 5; y++) {
+                for (let x = 0; x < 5; x++) {
+                    const cell = document.getElementById(`cell-${x}-${y}`);
+                    cell.className = 'grid-cell unvisited';
+                    if (startCell && startCell[0] === x && startCell[1] === y) {
+                        cell.classList.add('start');
+                    }
+                }
+            }
+
+            // Mark visited cells
+            visitedCells.forEach(pos => {
+                const [x, y] = pos.split(',').map(Number);
+                const cell = document.getElementById(`cell-${x}-${y}`);
+                if (cell) {
+                    cell.classList.remove('unvisited');
+                    cell.classList.add('visited');
+                }
+            });
+
+            // Mark current cell
+            if (currentCell) {
+                const [x, y] = currentCell;
+                const cell = document.getElementById(`cell-${x}-${y}`);
+                if (cell) {
+                    cell.classList.remove('unvisited', 'visited');
+                    cell.classList.add('current');
+                }
+            }
+        }
+
+        // Fetch logs from server
+        async function fetchLogs() {
+            const studentId = document.getElementById('student-id').value;
+            const trialName = document.getElementById('trial-name').value;
+            const logCount = document.getElementById('log-count').value;
+            const logOrder = document.getElementById('log-order').value;
+
+            const params = new URLSearchParams({
+                n: logCount,
+                order: logOrder
+            });
+
+            if (studentId) params.set('sid', studentId);
+            if (trialName) params.set('trial', trialName);
+
+            document.getElementById('status-text').textContent = 'Fetching logs...';
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/logs?${params.toString()}`);
+                if (!response.ok) throw new Error('Failed to fetch logs');
+                
+                const data = await response.json();
+                logs = data.logs || [];
+                
+                // Filter for neighbor function calls only
+                logs = logs.filter(log => log.func_name === 'neighbor');
+                
+                if (logs.length === 0) {
+                    document.getElementById('status-text').textContent = 'No neighbor function calls found in logs';
+                    return;
+                }
+
+                document.getElementById('status-text').textContent = `Loaded ${logs.length} neighbor function calls`;
+                
+                // Reset visualization state
+                currentLogIndex = -1;
+                visitedCells.clear();
+                currentCell = null;
+                
+                // Get start position from first log or default to (0,0)
+                startCell = [0, 0]; // Default start position
+                
+                populateLogList();
+                updateNavigationButtons();
+                updateGrid();
+                
+            } catch (error) {
+                console.error('Error fetching logs:', error);
+                document.getElementById('status-text').textContent = 'Error fetching logs: ' + error.message;
+            }
+        }
+
+        // Populate the log list
+        function populateLogList() {
+            const logList = document.getElementById('log-list');
+            logList.innerHTML = '';
+
+            logs.forEach((log, index) => {
+                const logEntry = document.createElement('div');
+                logEntry.className = 'log-entry';
+                logEntry.onclick = () => goToLog(index);
+                
+                try {
+                    // Handle different possible data formats
+                    let args, result;
+                    
+                    // Try to parse args
+                    if (typeof log.args_json === 'string') {
+                        args = JSON.parse(log.args_json);
+                    } else if (Array.isArray(log.args_json)) {
+                        args = log.args_json;
+                    } else {
+                        args = [];
+                    }
+                    
+                    // Try to parse result
+                    if (typeof log.result_json === 'string') {
+                        result = JSON.parse(log.result_json);
+                    } else if (Array.isArray(log.result_json)) {
+                        result = log.result_json;
+                    } else {
+                        result = log.result_json;
+                    }
+                    
+                    // Display the log entry
+                    if (args.length >= 2) {
+                        logEntry.innerHTML = `
+                            <div><strong>Log ${index + 1}:</strong> neighbor(${args[0]}, ${args[1]})</div>
+                            <div>Result: ${JSON.stringify(result)}</div>
+                            <div style="font-size: 10px; color: var(--muted-color);">${new Date(log.ts).toLocaleTimeString()}</div>
+                        `;
+                    } else {
+                        logEntry.innerHTML = `
+                            <div><strong>Log ${index + 1}:</strong> ${log.func_name || 'function call'}</div>
+                            <div>Args: ${JSON.stringify(args)}, Result: ${JSON.stringify(result)}</div>
+                            <div style="font-size: 10px; color: var(--muted-color);">${new Date(log.ts).toLocaleTimeString()}</div>
+                        `;
+                    }
+                } catch (e) {
+                    console.error('Error parsing log:', e, log);
+                    logEntry.innerHTML = `
+                        <div><strong>Log ${index + 1}:</strong> ${log.func_name || 'function call'}</div>
+                        <div>Parse error: ${e.message}</div>
+                        <div>Raw args: ${log.args_json}</div>
+                        <div>Raw result: ${log.result_json}</div>
+                    `;
+                }
+                
+                logList.appendChild(logEntry);
+            });
+        }
+
+        // Navigation functions
+        function goToFirst() {
+            goToLog(0);
+        }
+
+        function goToPrevious() {
+            if (currentLogIndex > 0) {
+                goToLog(currentLogIndex - 1);
+            }
+        }
+
+        function goToNext() {
+            if (currentLogIndex < logs.length - 1) {
+                goToLog(currentLogIndex + 1);
+            }
+        }
+
+        function goToLast() {
+            goToLog(logs.length - 1);
+        }
+
+        function goToLog(index) {
+            if (index < 0 || index >= logs.length) return;
+            
+            currentLogIndex = index;
+            
+            // Build visited set up to current log
+            visitedCells.clear();
+            currentCell = null;
+            
+            for (let i = 0; i <= index; i++) {
+                try {
+                    let args;
+                    
+                    // Handle different possible data formats
+                    if (typeof logs[i].args_json === 'string') {
+                        args = JSON.parse(logs[i].args_json);
+                    } else if (Array.isArray(logs[i].args_json)) {
+                        args = logs[i].args_json;
+                    } else {
+                        args = [];
+                    }
+                    
+                    if (args.length >= 2) {
+                        const x = args[0];
+                        const y = args[1];
+                        visitedCells.add(`${x},${y}`);
+                        if (i === index) {
+                            currentCell = [x, y];
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error parsing log args:', e, logs[i]);
+                }
+            }
+            
+            updateGrid();
+            updateCurrentLogInfo();
+            updateNavigationButtons();
+            updateLogListSelection();
+        }
+
+        function updateCurrentLogInfo() {
+            const infoDiv = document.getElementById('current-log-info');
+            
+            if (currentLogIndex < 0 || currentLogIndex >= logs.length) {
+                infoDiv.textContent = 'No logs loaded';
+                return;
+            }
+            
+            const log = logs[currentLogIndex];
+            try {
+                let args, result;
+                
+                // Handle different possible data formats
+                if (typeof log.args_json === 'string') {
+                    args = JSON.parse(log.args_json);
+                } else if (Array.isArray(log.args_json)) {
+                    args = log.args_json;
+                } else {
+                    args = [];
+                }
+                
+                if (typeof log.result_json === 'string') {
+                    result = JSON.parse(log.result_json);
+                } else if (Array.isArray(log.result_json)) {
+                    result = log.result_json;
+                } else {
+                    result = log.result_json;
+                }
+                
+                if (args.length >= 2) {
+                    infoDiv.innerHTML = `
+                        <div><strong>Log ${currentLogIndex + 1} of ${logs.length}</strong></div>
+                        <div>Function: neighbor(${args[0]}, ${args[1]})</div>
+                        <div>Result: ${JSON.stringify(result)}</div>
+                        <div>Student: ${log.student_id || 'Unknown'}</div>
+                        <div>Time: ${new Date(log.ts).toLocaleString()}</div>
+                    `;
+                } else {
+                    infoDiv.innerHTML = `
+                        <div><strong>Log ${currentLogIndex + 1} of ${logs.length}</strong></div>
+                        <div>Function: ${log.func_name || 'unknown'}</div>
+                        <div>Args: ${JSON.stringify(args)}</div>
+                        <div>Result: ${JSON.stringify(result)}</div>
+                        <div>Student: ${log.student_id || 'Unknown'}</div>
+                        <div>Time: ${new Date(log.ts).toLocaleString()}</div>
+                    `;
+                }
+            } catch (e) {
+                console.error('Error parsing log data:', e, log);
+                infoDiv.innerHTML = `
+                    <div><strong>Log ${currentLogIndex + 1} of ${logs.length}</strong></div>
+                    <div>Error parsing log data: ${e.message}</div>
+                    <div>Raw data: ${JSON.stringify(log)}</div>
+                `;
+            }
+        }
+
+        function updateNavigationButtons() {
+            const firstBtn = document.getElementById('first-btn');
+            const prevBtn = document.getElementById('prev-btn');
+            const nextBtn = document.getElementById('next-btn');
+            const lastBtn = document.getElementById('last-btn');
+            const position = document.getElementById('log-position');
+            
+            const hasLogs = logs.length > 0;
+            const isFirst = currentLogIndex <= 0;
+            const isLast = currentLogIndex >= logs.length - 1;
+            
+            firstBtn.disabled = !hasLogs || isFirst;
+            prevBtn.disabled = !hasLogs || isFirst;
+            nextBtn.disabled = !hasLogs || isLast;
+            lastBtn.disabled = !hasLogs || isLast;
+            
+            if (hasLogs && currentLogIndex >= 0) {
+                position.textContent = `${currentLogIndex + 1} / ${logs.length}`;
+            } else {
+                position.textContent = `0 / ${logs.length}`;
+            }
+        }
+
+        function updateLogListSelection() {
+            const logEntries = document.querySelectorAll('.log-entry');
+            logEntries.forEach((entry, index) => {
+                entry.classList.toggle('active', index === currentLogIndex);
+            });
+        }
+
+        // Require authentication to view dashboard
+        (async () => {
+            try {
+                const resp = await fetch(`${API_BASE_URL}/admin/ping`, { credentials: 'include' });
+                if (!resp.ok) {
+                    window.location.href = 'login.html';
+                }
+            } catch (e) {
+                window.location.href = 'login.html';
+            }
+        })();
+
+        // Initialize grid on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeGrid();
+        });
+    </script>
+</body>
+</html>

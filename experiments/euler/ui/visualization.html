@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Euler's Method Visualization</title>
+    <link rel="stylesheet" href="style/main.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@marimo-team/marimo-snippets@1"></script>
+    <style>
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        .back-btn {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .back-btn:hover {
+            background: #545b62;
+        }
+        .notebook-section {
+            margin-bottom: 40px;
+        }
+        .notebook-title {
+            color: #e0e0e0;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+    </style>
+</head>
+<body class="page-centered">
+    <div class="container">
+        <div class="header">
+            <h1 style="margin:0; color: #e0e0e0;">Euler's Method</h1>
+            <a href="dashboard.html" class="back-btn">Back to Dashboard</a>
+        </div>
+
+        <div class="notebook-section">
+            <h2 class="notebook-title">Instructor Visualization</h2>
+            <marimo-iframe data-theme="dark" data-height="600px">
+                <pre><code class="language-python"><pre><code class="language-python">#Instructor Instructions
+mo.md("""
+## Visualization Instructions
+
+### Step 1: Enter Student Information
+In the cell below, enter the student ID and trial information you want to analyze.
+
+### Step 2: Fetch Logs
+Run the "Fetch Logs" cell to retrieve the student's data from the server.
+
+### Step 3: Modify Analytical Solution
+In the plotting cell, update the analytical solution formula to match your differential equation:
+- Current: `y = e^(-2x)(x⁴/4 + 1)` 
+- Replace with your equation's analytical solution
+
+### Step 4: Run Plotting Cell
+Execute the plotting cell to compare student results vs analytical solution.
+
+---
+""")</code></pre></code></pre>
+               
+                <pre><code class="language-python">#Enter log fetch parameters
+student_id_input = mo.ui.text(
+    value="",
+    placeholder="Enter student ID",
+    label="Student ID (sid):"
+)
+
+trial_input = mo.ui.text(
+    value="",
+    placeholder="Enter trial name", 
+    label="Trial:"
+)
+
+count_input = mo.ui.number(
+    value=10,
+    start=1,
+    stop=10000,
+    step=1,
+    label="Number of logs (n):"
+)
+
+order_input = mo.ui.dropdown(
+    options=["latest", "earliest"],
+    value="latest",
+    label="Order:"
+)
+
+mo.vstack([
+    mo.md("**Log Fetch Parameters:**"),
+    student_id_input,
+    trial_input,
+    mo.hstack([count_input, order_input])
+])</code></pre>
+
+<pre><code class="language-python"># Fetch logs from your server
+params = {
+    "sid": student_id_input.value,
+    "trial": trial_input.value,
+    "n": count_input.value,
+    "order": order_input.value
+}
+logs = req.get("http://localhost:9000/logs", params=params).json()["logs"]
+print(f"Fetched {len(logs)} logs")
+                </code></pre>
+                
+                <pre><code class="language-python"># Extract data points from logs
+log_xs = []
+log_ys = []
+
+for log in logs:
+    try:
+        args = log.get('args_json', [])
+        if isinstance(args, str):
+            args = json.loads(args)
+        if isinstance(args, list) and len(args) == 1 and isinstance(args[0], list) and len(args[0]) == 2:
+            x, y = args[0]
+            log_xs.append(x)
+            log_ys.append(y)
+    except:
+        continue
+
+mo.md("**Note for Teacher:** Add the analytical solution formula in the code below to compare with student results.")
+
+if log_xs and log_ys:
+    plt.figure(figsize=(12, 8))
+    
+    # Plot student's Euler method results
+    plt.scatter(log_xs, log_ys, alpha=0.7, s=15, color='blue', label='Student Results')
+    
+    # Plot analytical solution: y = e^(-2x)(x⁴/4 + 1)
+    x_range = np.linspace(min(log_xs), max(log_xs), 1000)
+    y_actual = np.exp(-2 * x_range) * (x_range**4 / 4 + 1)
+    
+    plt.plot(x_range, y_actual, alpha=0.8, color='red', linewidth=2, label='Analytical Solution')
+    
+    plt.xlabel('x')
+    plt.ylabel('y')
+    plt.title('Student Euler Method vs Analytical Solution')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.show()
+    
+    print(f"Plotted {len(log_xs)} data points")
+else:
+    print("No valid data points found in logs to plot")
+
+                    </code></pre>
+
+                <pre><code class="language-python">import marimo as mo
+import requests as req
+import numpy as np
+import json
+import matplotlib.pyplot as plt</code></pre>
+
+            </marimo-iframe>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = window.location.origin;
+
+        // Require authentication to view dashboard
+        (async () => {
+            try {
+                const resp = await fetch(`${API_BASE_URL}/admin/ping`, { credentials: 'include' });
+                if (!resp.ok) {
+                    window.location.href = 'login.html';
+                }
+            } catch (e) {
+                window.location.href = 'login.html';
+            }
+        })();
+    </script>
+</body>
+</html>

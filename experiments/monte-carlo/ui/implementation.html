@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monte Carlo Implementation Notes</title>
+    <link rel="stylesheet" href="style/main.css" />
+    <style>
+        .container { max-width: 960px; margin: 0 auto; padding: 24px; }
+        pre { background: #111827; padding: 16px; border-radius: 10px; border: 1px solid var(--border-color); overflow-x: auto; }
+        code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; font-size: 14px; }
+        html[data-theme='light'] pre { background: #f3f4f6; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="toolbar" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+            <a href="dashboard.html">&larr; Back to Dashboard</a>
+            <div style="flex:1"></div>
+            <span class="badge" id="active-badge">Active: ...</span>
+        </div>
+
+        <h1 style="margin-top:24px;">Monte Carlo Experiment Implementation</h1>
+        <p>Use this page as a quick reference for calling the instructor-provided Monte Carlo helpers or for building your own student clients.</p>
+
+        <h2>Calling Instructor Functions</h2>
+        <p>The experiment exposes <code>estimate_pi(samples=10000)</code>, <code>random_point_square()</code>, <code>is_inside_unit_circle(x, y)</code>, and <code>echo(value)</code>. You can call them directly using the standard <code>/call</code> endpoint:</p>
+        <pre><code class="language-python">import requests
+
+payload = {
+    "student_id": "s001",
+    "func_name": "estimate_pi",
+    "args": [20000],           # number of Monte Carlo samples
+    "trial": "mc-lesson-1",
+    "experiment_name": "monte-carlo",
+}
+
+resp = requests.post("http://localhost:9000/call", json=payload)
+resp.raise_for_status()
+print(resp.json()["result"])  # Estimated value produced by Monte Carlo sampling
+</code></pre>
+
+        <h2>Logging Custom Random Points</h2>
+        <p>To contribute data points for the visualization programmatically (instead of using the Random Actions UI), send the same payload used by the page:</p>
+        <pre><code class="language-python">import random
+import requests
+import datetime as dt
+
+def random_point():
+    return (random.uniform(-1, 1), random.uniform(-1, 1))
+
+payload = {
+    "student_id": "s001",
+    "func_name": "echo",
+    "args": [{
+        "kind": "u2_pm",
+        "value": [round(coord, 6) for coord in random_point()],
+        "ts": dt.datetime.utcnow().isoformat(),
+    }],
+    "trial": "mc-lesson-1",
+    "experiment_name": "monte-carlo",
+}
+
+requests.post("http://localhost:9000/call", json=payload).raise_for_status()
+</code></pre>
+
+        <p>The visualization notebook loads the most recent logs and colors each point based on whether it lies inside the unit circle. Ensure the <code>trial</code> field matches what you use when sampling via the UI so that filtering works smoothly.</p>
+    </div>
+
+    <script>
+        const API_BASE_URL = window.location.origin;
+        (async () => {
+            try {
+                const r = await fetch(`${API_BASE_URL}/api/active-experiment`);
+                if (r.ok) {
+                    const d = await r.json();
+                    document.getElementById('active-badge').textContent = `Active: ${d.active || 'none'}`;
+                }
+            } catch {
+                document.getElementById('active-badge').textContent = 'Active: ?';
+            }
+        })();
+    </script>
+    <script src="scripts/theme.js"></script>
+</body>
+</html>

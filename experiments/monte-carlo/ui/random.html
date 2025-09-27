@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Monte Carlo Random Actions</title>
+  <link rel="stylesheet" href="style/main.css" />
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+    body { font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .controls .field { display: flex; flex-direction: column; gap: 6px; }
+    .panel {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      background: linear-gradient(135deg, rgba(17, 24, 39, 0.9), rgba(30, 41, 59, 0.92));
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 18px 32px rgba(2,6,23,.32);
+    }
+    html[data-theme='light'] .panel {
+      background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(243,244,246,0.98));
+      box-shadow: 0 16px 30px rgba(15,20,34,.12);
+    }
+    .panel h3 { font-size: 20px; margin: 0; color: var(--primary-color); }
+    .panel p { margin: 0; color: var(--muted-color); font-size: 14px; }
+    .viz {
+      display: grid; grid-template-columns: 1fr 360px; gap: 18px; align-items: center;
+    }
+    @media (max-width: 900px) { .viz { grid-template-columns: 1fr; } }
+    .viz-card {
+      background: linear-gradient(180deg, rgba(28,36,54,.96), rgba(25,34,51,.92));
+      border: 1px solid var(--border-color); border-radius: 16px; padding: 16px;
+      box-shadow: 0 10px 20px rgba(2,6,23,.28), inset 0 1px 0 rgba(255,255,255,.04);
+    }
+    html[data-theme='light'] .viz-card { background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(247,249,252,.96)); }
+    .square-wrap { display:flex; align-items:center; justify-content:center; }
+    #unit-square { width: 360px; height: 360px; border-radius: 14px; display:block; }
+    .result {
+      display:flex; align-items:center; justify-content:center; min-height: 64px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace; font-size: 20px;
+      color: var(--secondary-color);
+      background: linear-gradient(180deg, rgba(28,36,54,.96), rgba(25,34,51,.92));
+      border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 12px;
+      box-shadow: 0 10px 20px rgba(2,6,23,.28), inset 0 1px 0 rgba(255,255,255,.04);
+    }
+    html[data-theme='light'] .result {
+      color: #0f1422;
+      background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(247,249,252,.96));
+      box-shadow: 0 10px 20px rgba(15,20,34,.12), inset 0 1px 0 rgba(255,255,255,.6);
+    }
+    #sample-btn {
+      height: 56px;
+      font-size: 18px;
+      font-weight: 700;
+      border-radius: 12px;
+      width: 100%;
+    }
+    .msg { font-size: 13px; color: var(--muted-color); min-height: 1.2em; margin-top: 8px; }
+    .msg.ok { color: var(--success-color); }
+    .msg.err { color: var(--error-color); }
+    .hint { font-size: 12px; color: var(--muted-color); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="toolbar" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+      <a href="dashboard.html">&larr; Back</a>
+      <div style="flex:1"></div>
+      <span class="badge" id="active">Active: ...</span>
+    </div>
+    <h1>Monte Carlo Random Actions</h1>
+    <p style="margin-top:-6px; color: var(--muted-color);">Sample random points from the square [-1, 1] x [-1, 1]. This page is preview-only for this experiment (no server logging).</p>
+
+    <div class="controls">
+      <div class="field">
+        <label for="studentId">Student ID</label>
+        <input id="studentId" type="text" placeholder="e.g. s001" />
+      </div>
+      <div class="field">
+        <label for="experimentName">Experiment Name</label>
+        <input id="experimentName" type="text" placeholder="auto-detected" disabled />
+      </div>
+      <div class="field">
+        <label for="trial">Trial Name / ID</label>
+        <input id="trial" type="text" placeholder="e.g. mc-lesson-1" />
+      </div>
+    </div>
+
+    <div class="panel">
+      <div>
+        <h3>Uniform Point in [-1, 1]<sup>2</sup></h3>
+        <p>Each click samples a new point and previews it on the square.</p>
+      </div>
+      <div class="viz">
+        <div>
+          <div class="result" id="sample-output">--</div>
+          <button class="btn" id="sample-btn" style="margin-top:12px;">Sample Point</button>
+          <div class="msg" id="sample-msg"></div>
+          <div class="hint">Preview only; data is not sent to the server.</div>
+        </div>
+        <div class="viz-card">
+          <div class="square-wrap">
+            <canvas id="unit-square" width="360" height="360"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const sidEl = document.getElementById('studentId');
+    const expNameEl = document.getElementById('experimentName');
+    const trialEl = document.getElementById('trial');
+    const outputEl = document.getElementById('sample-output');
+    const msgEl = document.getElementById('sample-msg');
+    const canvas = document.getElementById('unit-square');
+    const ctx = canvas.getContext('2d');
+    
+    // Store previous points for persistence
+    let previousPoints = [];
+
+    sidEl.value = localStorage.getItem('monte.random.sid') || '';
+    expNameEl.value = localStorage.getItem('monte.random.expName') || '';
+    trialEl.value = localStorage.getItem('monte.random.trial') || '';
+
+    sidEl.addEventListener('input', () => localStorage.setItem('monte.random.sid', sidEl.value.trim()));
+    expNameEl.addEventListener('input', () => localStorage.setItem('monte.random.expName', expNameEl.value.trim()));
+    trialEl.addEventListener('input', () => localStorage.setItem('monte.random.trial', trialEl.value.trim()));
+
+    (async () => {
+      try {
+        const match = window.location.pathname.match(/\/exp\/([^\/]+)/);
+        if (match && match[1]) {
+          if (!expNameEl.value) {
+            expNameEl.value = match[1];
+            localStorage.setItem('monte.random.expName', expNameEl.value.trim());
+          }
+          return;
+        }
+        if (!expNameEl.value) {
+          const res = await fetch(`${window.location.origin}/api/active-experiment`).catch(() => null);
+          if (res && res.ok) {
+            const data = await res.json();
+            if (data && data.active && !expNameEl.value) {
+              expNameEl.value = data.active;
+              localStorage.setItem('monte.random.expName', expNameEl.value.trim());
+            }
+          }
+        }
+      } catch (_) {}
+    })();
+
+    (async function(){
+      try {
+        const res = await fetch(`${window.location.origin}/api/active-experiment`);
+        if (res.ok) {
+          const data = await res.json();
+          document.getElementById('active').textContent = `Active: ${data.active || 'none'}`;
+        }
+      } catch {}
+    })();
+
+    function randomPoint() {
+      const x = 2 * Math.random() - 1;
+      const y = 2 * Math.random() - 1;
+      return [Number(x.toFixed(6)), Number(y.toFixed(6))];
+    }
+
+    function nowIso() { return new Date().toISOString(); }
+
+    function ensureRequiredFields() {
+      const sid = sidEl.value.trim();
+      if (!sid) throw new Error('Please enter Student ID');
+      const trial = trialEl.value.trim();
+      if (!trial) throw new Error('Please enter Trial Name/ID');
+      return { sid, trial };
+    }
+
+    async function sendResult(value) {
+      const { sid, trial } = ensureRequiredFields();
+      const payload = { kind: 'u2_pm', value, ts: nowIso() };
+      let experiment_name = '';
+      try {
+        const res = await fetch(`${window.location.origin}/api/active-experiment`);
+        if (res.ok) {
+          const data = await res.json();
+          experiment_name = data.active || '';
+        }
+      } catch {}
+      const body = { student_id: sid, func_name: 'echo', args: [payload], trial, experiment_name };
+      const url = `${window.location.origin}/call`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) {
+        let message = '';
+        try {
+          const data = await res.json();
+          if (data && data.detail !== undefined) {
+            message = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail);
+          }
+        } catch {
+          try { message = await res.text(); } catch {}
+        }
+        throw new Error(message || `HTTP ${res.status}`);
+      }
+      return res.json();
+    }
+
+    // Drawing helpers
+    function drawScene(newPoint) {
+      const w = canvas.width, h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+      // Background
+      const grad = ctx.createLinearGradient(0, 0, w, h);
+      grad.addColorStop(0, '#0f172a');
+      grad.addColorStop(1, '#111827');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+      // Inner panel
+      ctx.save();
+      ctx.translate(12, 12);
+      const sz = w - 24;
+      // Square background
+      ctx.fillStyle = 'rgba(148,163,184,0.06)';
+      ctx.strokeStyle = 'rgba(148,163,184,0.5)';
+      ctx.lineWidth = 1.2;
+      roundRect(ctx, 0, 0, sz, sz, 12, true, true);
+      // Grid
+      ctx.strokeStyle = 'rgba(148,163,184,0.25)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let i = 1; i < 10; i++) {
+        const t = (i / 10) * sz;
+        ctx.moveTo(t, 0); ctx.lineTo(t, sz);
+        ctx.moveTo(0, t); ctx.lineTo(sz, t);
+      }
+      ctx.stroke();
+      // Unit circle
+      ctx.strokeStyle = '#22d3ee';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.arc(sz/2, sz/2, sz/2, 0, Math.PI * 2);
+      ctx.stroke();
+      // Axes
+      ctx.strokeStyle = 'rgba(148,163,184,0.6)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(sz/2, 0); ctx.lineTo(sz/2, sz);
+      ctx.moveTo(0, sz/2); ctx.lineTo(sz, sz/2);
+      ctx.stroke();
+      
+      // Draw all previous points with fading alpha
+      for (let i = 0; i < previousPoints.length; i++) {
+        const point = previousPoints[i];
+        const [x, y] = point.coords;
+        const px = ((x + 1) / 2) * sz;
+        const py = ((1 - (y + 1) / 2)) * sz;
+        const inside = point.inside;
+        
+        // Calculate alpha based on age (newer = more opaque)
+        const age = previousPoints.length - i;
+        const maxAge = Math.min(previousPoints.length, 20); // Show up to 20 previous points
+        const alpha = Math.max(0.1, 1 - (age / maxAge));
+        
+        const r = 4; // Slightly smaller for previous points
+        ctx.fillStyle = inside ? `rgba(52,211,153,${alpha})` : `rgba(248,113,113,${alpha})`;
+        ctx.beginPath(); 
+        ctx.arc(px, py, r, 0, Math.PI*2); 
+        ctx.fill();
+      }
+      
+      // Draw new point (if any) with full opacity
+      if (newPoint) {
+        const [x, y] = newPoint; // in [-1,1]
+        const px = ((x + 1) / 2) * sz;
+        const py = ((1 - (y + 1) / 2)) * sz;
+        const inside = (x*x + y*y) <= 1;
+        const r = 6;
+        const glow = ctx.createRadialGradient(px, py, 0, px, py, 16);
+        glow.addColorStop(0, inside ? 'rgba(52,211,153,0.6)' : 'rgba(248,113,113,0.6)');
+        glow.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = glow;
+        ctx.beginPath(); ctx.arc(px, py, 16, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = inside ? '#34d399' : '#f87171';
+        ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI*2); ctx.fill();
+        
+        // Add this point to previous points
+        previousPoints.push({
+          coords: [x, y],
+          inside: inside,
+          timestamp: Date.now()
+        });
+        
+        // Limit the number of stored points to prevent memory issues
+        if (previousPoints.length > 50) {
+          previousPoints.shift(); // Remove oldest point
+        }
+      }
+      ctx.restore();
+    }
+
+    function roundRect(ctx, x, y, width, height, radius, fill, stroke) {
+      if (typeof radius === 'number') {
+        radius = {tl: radius, tr: radius, br: radius, bl: radius};
+      } else {
+        radius = Object.assign({tl: 0, tr: 0, br: 0, bl: 0}, radius);
+      }
+      ctx.beginPath();
+      ctx.moveTo(x + radius.tl, y);
+      ctx.lineTo(x + width - radius.tr, y);
+      ctx.quadraticCurveTo(x + width, y, x + width, y + radius.tr);
+      ctx.lineTo(x + width, y + height - radius.br);
+      ctx.quadraticCurveTo(x + width, y + height, x + width - radius.br, y + height);
+      ctx.lineTo(x + radius.bl, y + height);
+      ctx.quadraticCurveTo(x, y + height, x, y + height - radius.bl);
+      ctx.lineTo(x, y + radius.tl);
+      ctx.quadraticCurveTo(x, y, x + radius.tl, y);
+      ctx.closePath();
+      if (fill) ctx.fill();
+      if (stroke) ctx.stroke();
+    }
+
+    drawScene();
+
+    document.getElementById('sample-btn').addEventListener('click', async () => {
+      try {
+        const value = randomPoint();
+        outputEl.textContent = JSON.stringify(value);
+        drawScene(value);
+        msgEl.textContent = 'Logging...';
+        msgEl.className = 'msg';
+        await sendResult(value);
+        msgEl.textContent = 'Logged';
+        msgEl.className = 'msg ok';
+      } catch (err) {
+        msgEl.textContent = (err && err.message) ? err.message : String(err);
+        msgEl.className = 'msg err';
+      }
+    });
+  </script>
+  <script src="scripts/theme.js"></script>
+</body>
+</html>
+

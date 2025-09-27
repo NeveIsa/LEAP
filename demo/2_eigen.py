@@ -17,6 +17,7 @@ def powerMethod(A, maxIterations = 1000, tol = 1e-10):
     x = np.random.randn(n) #nonzero random vector
     x /= np.linalg.norm(x) #normaliing vector to have length 1
     previousLam = 0 #used as reference to check if eigenvalue is close enough to the tol
+    x_trajectory = []
 
     for _ in range(maxIterations):
         y = np.array(A(x.tolist())) #applying transformation to x
@@ -24,6 +25,7 @@ def powerMethod(A, maxIterations = 1000, tol = 1e-10):
         if normY == 0: #if length of y is already equal to zero 
             return 0, x #eigen value is 0 @ this x
         x = y / normY #setting x to normalized length y (for finding the next approximation)
+        # x_trajectory.append(x.copy())
         lam = x @ np.array(A(x.tolist())) #computing the rayleigh quotient to find the eigenvalue
         if abs(lam - previousLam) < tol * (1 + abs(lam)): #comparing the change in the eigenvalue to see if it has converged, then we can assume the vector is stabilized
             return lam, x

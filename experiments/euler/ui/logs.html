@@ -6,19 +6,19 @@
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>Logs</title>
+  <title>Euler's Method - Logs</title>
   <link rel="stylesheet" href="style/main.css" />
 </head>
 <body>
   <div class="container">
     <header>
-      <h1>Logs</h1>
-      <span class="subtle">Configurable limit</span>
+      <h1>Euler's Method - Logs</h1>
+      <span class="subtle">Last 100 entries</span>
       <span class="badge" id="active-badge" style="float:right;margin-left:6px">Active: …</span>
     </header>
 
     <div class="toolbar" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-      <a href="dashboard.html">← Back</a>
+      <a href="dashboard.html">← Back to Euler Dashboard</a>
       <div style="flex:1"></div>
       <label for="studentSelect">Student:</label>
       <select id="studentSelect" class="input">
@@ -30,8 +30,6 @@
       </select>
       <button class="btn" id="filterBtn">Filter</button>
       <button class="btn" id="refreshBtn">Clear</button>
-      <label for="limitInput">Limit:</label>
-      <input type="number" id="limitInput" class="input" value="100" min="1" max="10000" style="width:80px">
       <span class="badge" id="countBadge">Loading…</span>
       <span class="badge" id="updatedBadge"></span>
     </div>
@@ -69,15 +67,12 @@
     const QS = new URLSearchParams(window.location.search);
     const QS_SID = QS.get('sid') || QS.get('student_id') || '';
     const QS_EXP = QS.get('trial') || QS.get('trial_name') || QS.get('exp') || QS.get('experiment_name') || '';
-    // Scope badge removed; rely on Active badge only.
 
     function setMsg(text) { msg.textContent = text || ''; }
 
     async function fetchLogs(studentId, experimentNameFilter) {
       try {
-        const limitInput = document.getElementById('limitInput');
-        const limit = Math.max(1, Math.min(10000, parseInt(limitInput.value) || 100));
-        const params = new URLSearchParams({ n: limit, order: 'latest' });
+        const params = new URLSearchParams({ n: 100, order: 'latest' });
         if (studentId) params.set('student_id', studentId);
         if (experimentNameFilter) params.set('trial', experimentNameFilter);
         const res = await fetch(`${API_BASE_URL}/logs?${params.toString()}`);
@@ -106,91 +101,98 @@
       optAll.textContent = 'All';
       sel.appendChild(optAll);
       for (const v of values) {
-        const o = document.createElement('option');
-        o.value = v;
-        o.textContent = v;
-        sel.appendChild(o);
+        const opt = document.createElement('option');
+        opt.value = v;
+        opt.textContent = v;
+        sel.appendChild(opt);
       }
+    }
+
+    async function loadOptions() {
+      try {
+        const res = await fetch(`${API_BASE_URL}/log-options`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const students = uniqueSorted([...(data.students || []), ...(data.student_ids || [])]);
+        const trials = uniqueSorted([...(data.trials || []), ...(data.experiments || [])]);
+        populateSelect(studentSelect, students);
+        populateSelect(expSelect, trials);
+        if (QS_SID && students.includes(QS_SID)) studentSelect.value = QS_SID;
+        if (QS_EXP && trials.includes(QS_EXP)) expSelect.value = QS_EXP;
+      } catch (e) {
+        console.error('Load options failed', e);
+      }
+    }
+
+    function formatValue(val) {
+      if (val === null || val === undefined) return 'null';
+      if (typeof val === 'string') return val.length > 50 ? val.substring(0, 50) + '…' : val;
+      if (Array.isArray(val)) return `[${val.length} items]`;
+      if (typeof val === 'object') return '{' + Object.keys(val).length + ' keys}';
+      return String(val);
     }
 
     function renderLogs(logs) {
       logBody.innerHTML = '';
-      if (!logs.length) {
-        const tr = document.createElement('tr');
-        const td = document.createElement('td');
-        td.colSpan = 7;
-        td.textContent = 'No logs available.';
-        tr.appendChild(td);
-        logBody.appendChild(tr);
-        return;
-      }
-
-      for (const row of logs) {
-        const tr = document.createElement('tr');
-        const tds = [
-          new Date(row.ts).toLocaleString([], { hour12: false, year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short' }),
-          row.student_id || '',
-          (row.trial || row.experiment_name || ''),
-          row.func_name || '',
-          row.args_json || '',
-          row.result_json || '',
-          row.error || ''
-        ];
-
-        tds.forEach((val, i) => {
-          const td = document.createElement('td');
-          td.className = i <= 3 ? 'min' : 'code';
-          td.textContent = typeof val === 'string' ? val : String(val);
-          tr.appendChild(td);
-        });
-
-        logBody.appendChild(tr);
-      }
-    }
-
-    function updateUrlParams(sid, exp) {
-      const url = new URL(window.location.href);
-      if (sid) url.searchParams.set('sid', sid); else url.searchParams.delete('sid');
-      if (exp) url.searchParams.set('exp', exp); else url.searchParams.delete('exp');
-      history.replaceState(null, '', url);
-    }
-
-    async function refresh() {
-      setMsg('');
-      countBadge.textContent = 'Loading…';
-      const studentId = studentSelect.value;
-      const experimentName = expSelect.value;
-      updateUrlParams(studentId, experimentName);
-      const logs = await fetchLogs(studentId, experimentName);
-      renderLogs(logs);
       countBadge.textContent = `${logs.length} logs`;
       updatedBadge.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+      if (logs.length === 0) {
+        const row = document.createElement('tr');
+        row.innerHTML = '<td colspan="7" style="text-align:center;">No logs found.</td>';
+        logBody.appendChild(row);
+        return;
+      }
+      for (const log of logs) {
+        const row = document.createElement('tr');
+        const time = new Date(log.ts || '').toLocaleString();
+        const student = log.student_id || 'N/A';
+        const trial = log.trial || log.experiment || 'N/A';
+        const func = log.func_name || 'N/A';
+        const args = formatValue(log.args_json);
+        const result = formatValue(log.result_json);
+        const error = log.error || '';
+        row.innerHTML = `
+          <td class="min">${time}</td>
+          <td class="min">${student}</td>
+          <td class="min">${trial}</td>
+          <td class="code">${func}</td>
+          <td class="code">${args}</td>
+          <td class="code">${result}</td>
+          <td class="code text-error">${error}</td>
+        `;
+        logBody.appendChild(row);
+      }
     }
 
-    document.getElementById('filterBtn').addEventListener('click', refresh);
-    document.getElementById('refreshBtn').addEventListener('click', () => {
-        studentSelect.value = '';
-        expSelect.value = '';
-        refresh();
-    });
+    async function refreshLogs() {
+      const studentId = studentSelect.value || '';
+      const experimentNameFilter = expSelect.value || '';
+      const logs = await fetchLogs(studentId, experimentNameFilter);
+      renderLogs(logs);
+    }
+
     async function refreshActive() {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/active-experiment`);
-        const data = await res.json();
-        document.getElementById('active-badge').textContent = `Active: ${data.active || 'none'}`;
-      } catch { document.getElementById('active-badge').textContent = 'Active: ?'; }
+        const r = await fetch(`${API_BASE_URL}/api/active-experiment`);
+        const d = await r.json();
+        document.getElementById('active-badge').textContent = `Active: ${d.active || 'none'}`;
+      } catch {
+        document.getElementById('active-badge').textContent = 'Active: ?';
+      }
     }
 
+    document.getElementById('filterBtn').addEventListener('click', refreshLogs);
+    document.getElementById('refreshBtn').addEventListener('click', () => {
+      studentSelect.value = '';
+      expSelect.value = '';
+      refreshLogs();
+    });
+
     document.addEventListener('DOMContentLoaded', async () => {
-      refreshActive();
-      const seedLogs = await fetchLogs('', '');
-      const students = uniqueSorted(seedLogs.map(l => l.student_id));
-      const exps = uniqueSorted(seedLogs.map(l => l.trial || l.experiment_name));
-      populateSelect(studentSelect, students);
-      populateSelect(expSelect, exps);
-      if (QS_SID) studentSelect.value = QS_SID;
-      if (QS_EXP) expSelect.value = QS_EXP;
-      refresh();
+      await refreshActive();
+      await loadOptions();
+      await refreshLogs();
+      setInterval(refreshActive, 5000);
     });
   </script>
   <script src="scripts/theme.js"></script>

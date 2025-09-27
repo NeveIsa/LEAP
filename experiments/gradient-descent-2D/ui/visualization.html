@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gradient Descent 2D Visualization</title>
+    <link rel="stylesheet" href="style/main.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@marimo-team/marimo-snippets@1"></script>
+    <style>
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        .back-btn {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .back-btn:hover {
+            background: #545b62;
+        }
+        .notebook-section {
+            margin-bottom: 40px;
+        }
+        .notebook-title {
+            color: #e0e0e0;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+    </style>
+</head>
+<body class="page-centered">
+    <div class="container">
+        <div class="header">
+            <h1 style="margin:0; color: #e0e0e0;">Gradient Descent 2D</h1>
+            <a href="dashboard.html" class="back-btn">Back to Dashboard</a>
+        </div>
+
+        <div class="notebook-section">
+            <h2 class="notebook-title">Instructor Visualization</h2>
+            <marimo-iframe data-theme="dark" data-height="600px">
+                <pre><code class="language-python">import marimo as mo
+import requests as req
+import numpy as np
+import json
+import matplotlib.pyplot as plt</code></pre>
+
+                <pre><code class="language-python"># Instructor instructions
+mo.md("""
+## Visualization Guide
+
+1. Select the student and activity focus below.
+2. Fetch logs to retrieve recorded power-method calls.
+3. Run the analysis cell to visualise eigenvalue estimates and residuals.
+4. Compare convergence against the true dominant eigenvalue (-4).
+""")</code></pre>
+
+                <pre><code class="language-python"># Log fetch parameters
+student_id_input = mo.ui.text(
+    value="",
+    placeholder="Enter student ID",
+    label="Student ID (sid):"
+)
+
+trial_input = mo.ui.text(
+    value="",
+    placeholder="Enter trial name (e.g., power-method-demo)",
+    label="Trial Name:"
+)
+
+count_input = mo.ui.number(
+    value=500,
+    start=1,
+    stop=5000,
+    step=10,
+    label="Number of logs (n):"
+)
+
+order_input = mo.ui.dropdown(
+    options=["latest", "earliest"],
+    value="latest",
+    label="Order:"
+)
+
+mo.vstack([
+    mo.md("**Log Fetch Parameters:**"),
+    trial_input,
+    student_id_input,
+    mo.hstack([count_input, order_input])
+])</code></pre>
+
+                <pre><code class="language-python"># Fetch logs from the server
+params = {
+    "sid": student_id_input.value,
+    "trial": trial_input.value,
+    "n": count_input.value,
+    "order": order_input.value,
+}
+response = req.get("http://localhost:9000/logs", params=params)
+response.raise_for_status()
+logs = response.json().get("logs", [])
+print(f"Fetched {len(logs)} logs")</code></pre>
+
+                <pre><code class="language-python"># Debug and plot the results
+print(f"Total logs: {len(logs)}")
+print("First few logs:")
+for i, log in enumerate(logs[:3]):
+    print(f"Log {i}: func_name={log.get('func_name')}, args_json={log.get('args_json')}, result_json={log.get('result_json')}")
+
+# Extract arguments and results from gradient descent function calls
+f_args_data = []
+f_results_data = []
+df_args_data = []
+df_results_data = []
+
+for log in logs:
+    func_name = log.get("func_name")
+    if func_name in ["f", "df"]:
+        print(f"Found {func_name} call: args_json={log.get('args_json')}, result_json={log.get('result_json')}")
+
+        # Parse arguments and results - handle different formats
+        try:
+            args_json = log.get("args_json")
+            result_json = log.get("result_json")
+
+            # Handle string JSON
+            if isinstance(args_json, str):
+                args = json.loads(args_json)
+            else:
+                args = args_json
+
+            if isinstance(result_json, str):
+                result = json.loads(result_json)
+            else:
+                result = result_json
+
+            # Check if we have valid 2D function arguments (x, y)
+            if isinstance(args, list) and len(args) == 2:
+                if func_name == "f":
+                    f_args_data.append(args)
+                    f_results_data.append(result)
+                elif func_name == "df":
+                    df_args_data.append(args)
+                    # df returns (df/dx, df/dy) tuple
+                    if isinstance(result, list) and len(result) == 2:
+                        df_results_data.append(result)
+
+        except Exception as e:
+            print(f"Error parsing log: {e}")
+            continue
+
+print(f"Extracted {len(f_args_data)} f() calls and {len(df_args_data)} df() calls")
+
+# Create gradient descent visualization
+plt.figure(figsize=(12, 8))
+
+if f_args_data or df_args_data:
+    # Create contour plot of the function landscape
+    x = np.linspace(-30, 30, 100)
+    y = np.linspace(-30, 30, 100)
+    X, Y = np.meshgrid(x, y)
+    
+    # Define the function for plotting
+    zero = 20
+    def f_plot(x, y):
+        v = ((x - zero)**2 + 10*(y - zero)**2) * (5*(x + zero)**2 + (y + zero)**2)
+        return v / 100
+    
+    Z = f_plot(X, Y)
+    
+    # Plot contour lines
+    contours = plt.contour(X, Y, Z, levels=30, alpha=0.6, colors='gray', linewidths=0.5)
+    plt.contourf(X, Y, Z, levels=30, alpha=0.3, cmap='viridis')
+    plt.colorbar(label='Function Value f(x,y)')
+    
+    # Plot function evaluation points (f calls)
+    if f_args_data:
+        f_x = [point[0] for point in f_args_data]
+        f_y = [point[1] for point in f_args_data]
+        plt.scatter(f_x, f_y, alpha=0.7, label=f'Function evaluations f(x,y) ({len(f_args_data)})', 
+                   color='red', s=30, marker='o')
+    
+    # Plot gradient evaluation points (df calls) 
+    if df_args_data:
+        df_x = [point[0] for point in df_args_data]
+        df_y = [point[1] for point in df_args_data]
+        plt.scatter(df_x, df_y, alpha=0.7, label=f'Gradient evaluations df(x,y) ({len(df_args_data)})', 
+                   color='blue', s=20, marker='x')
+        
+        # If we have gradient data, try to reconstruct the optimization path
+        if len(df_args_data) > 10:  # Only if we have enough points
+            # Sort by timestamp if available, otherwise use order
+            sorted_points = df_args_data
+            path_x = [point[0] for point in sorted_points]
+            path_y = [point[1] for point in sorted_points]
+            plt.plot(path_x, path_y, 'blue', alpha=0.8, linewidth=2, label='Gradient descent path')
+            
+            # Mark start and end points
+            if len(sorted_points) > 0:
+                plt.scatter(path_x[0], path_y[0], color='green', s=100, marker='s', 
+                           label='Start point', zorder=5)
+                plt.scatter(path_x[-1], path_y[-1], color='orange', s=100, marker='*', 
+                           label='End point', zorder=5)
+
+    # Mark the theoretical minima
+    plt.scatter([zero, -zero], [zero, -zero], color='purple', s=150, marker='D', 
+               label='Theoretical minima', zorder=5)
+
+    plt.xlabel('x coordinate')
+    plt.ylabel('y coordinate')
+    plt.title(f"Gradient Descent 2D Visualization")
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.show()
+
+    print(f"Plotted {len(f_args_data)} function evaluations and {len(df_args_data)} gradient evaluations")
+    
+    # Show some statistics
+    if df_args_data:
+        print(f"Optimization path: ({df_args_data[0][0]:.3f}, {df_args_data[0][1]:.3f}) → ({df_args_data[-1][0]:.3f}, {df_args_data[-1][1]:.3f})")
+        
+else:
+    print("No valid gradient descent data found to plot")
+    print("Make sure students are running gradient descent with the 'f' and 'df' functions")</code></pre>
+            </marimo-iframe>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = window.location.origin;
+
+        // Require authentication to view dashboard
+        (async () => {
+            try {
+                const resp = await fetch(`${API_BASE_URL}/admin/ping`, { credentials: 'include' });
+                if (!resp.ok) {
+                    window.location.href = 'login.html';
+                }
+            } catch (e) {
+                window.location.href = 'login.html';
+            }
+        })();
+    </script>
+</body>
+</html>

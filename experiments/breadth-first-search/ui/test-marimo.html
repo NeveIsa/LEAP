@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Marimo</title>
+    <script src="https://cdn.jsdelivr.net/npm/@marimo-team/marimo-snippets@1"></script>
+</head>
+<body>
+    <h1>Test Marimo Snippets</h1>
+    
+    <marimo-iframe data-theme="dark" data-height="400px">
+        <pre><code class="language-python">import marimo as mo</code></pre>
+        <pre><code class="language-python">mo.md("# Hello World")</code></pre>
+        <pre><code class="language-python">print("This is a test")</code></pre>
+    </marimo-iframe>
+
+    <script>
+        console.log('Page loaded');
+        
+        // Check if marimo snippets loaded
+        setTimeout(() => {
+            const marimoElements = document.querySelectorAll('marimo-iframe');
+            console.log('Found marimo elements:', marimoElements.length);
+        }, 2000);
+    </script>
+</body>
+</html>

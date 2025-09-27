@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Root Finding Dashboard</title>
+    <link rel="stylesheet" href="style/main.css" />
+</head>
+<body class="page-centered">
+    <div class="dashboard-container">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:16px;">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <a href="/" class="btn">← Experiments</a>
+                <h1 style="margin:0;">Root Finding Dashboard</h1>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+                <span class="badge" id="active-badge">Active: …</span>
+                <span class="badge" id="auth-badge">Auth: …</span>
+                <button id="login-btn" class="btn" title="Login for management actions">Login</button>
+                <button id="logout-btn" class="btn">Logout</button>
+            </div>
+        </div>
+        <div class="links-grid">
+            <a href="students.html" class="dashboard-link">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                Students
+            </a>
+            <a href="logs.html" class="dashboard-link">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 5h18v2H3V5zm0 6h18v2H3v-2zm0 6h18v2H3v-2z"/></svg>
+                Logs List
+            </a>
+            <a href="visualization.html" class="dashboard-link">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+                Visualization
+            </a>
+            <a href="implementation.html" class="dashboard-link">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/></svg>
+                Implementation
+            </a>
+            </div>
+
+        <div style="margin-top:20px; border:1px solid var(--border-color); border-radius:10px; padding:14px; background: var(--surface-color);">
+            <h2 style="margin:0 0 8px 0; font-size:18px;">Root Finding Activity (last 50)</h2>
+            <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
+                <div style="display:flex; align-items:center; gap:6px;">
+                    <label for="k-trial" class="subtle">Trial</label>
+                    <select id="k-trial" class="input" style="padding:6px 8px; background:#121826; color:#e5e7eb; border:1px solid var(--border-color); border-radius:8px;">
+                        <option value="">All</option>
+                    </select>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span class="badge" id="k-logs">0</span>
+                    <span class="subtle">logs</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span class="badge" id="k-students">0</span>
+                    <span class="subtle">students</span>
+                </div>
+                <div class="subtle" id="k-upd">—</div>
+            </div>
+            <div class="spark-wrap">
+                <canvas id="k-spark" width="360" height="48" class="spark-canvas"></canvas>
+            </div>
+        </div>
+
+        <div style="margin-top:20px; border:1px solid var(--border-color); border-radius:10px; padding:14px; background: var(--surface-color);">
+            <h2 style="margin:0 0 8px 0; font-size:18px;">Available Functions</h2>
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:12px; margin-top:12px;">
+                <div class="card">
+                    <h3 style="margin:0 0 8px 0; color:var(--primary-color);">square(x)</h3>
+                </div>
+                <div class="card">
+                    <h3 style="margin:0 0 8px 0; color:var(--primary-color);">cubic(x)</h3>
+                </div>
+                <div class="card">
+                    <h3 style="margin:0 0 8px 0; color:var(--primary-color);">rosenbrock(x, y, a=1.0, b=100.0)</h3>
+                </div>
+                <div class="card">
+                    <h3 style="margin:0 0 8px 0; color:var(--primary-color);">quadratic(a, b, c, x)</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+  <script>
+        const API_BASE_URL = window.location.origin;
+        const expMatch = window.location.pathname.match(/\/exp\/([^\/]+)/);
+        const expPrefix = '';
+        async function refreshActive(){
+            try{ const r=await fetch(`${API_BASE_URL}/api/active-experiment`); const d=await r.json(); document.getElementById('active-badge').textContent=`Active: ${d.active || 'none'}`; }catch{ document.getElementById('active-badge').textContent='Active: ?'; }
+        }
+
+        const authBadge = document.getElementById('auth-badge');
+        async function refreshAuth() {
+            try {
+                const resp = await fetch(`${API_BASE_URL}/admin/ping`, { credentials: 'include' });
+                const loggedIn = resp.ok;
+                authBadge.textContent = loggedIn ? 'Auth: logged in' : 'Auth: logged out';
+                loginBtn.style.display = loggedIn ? 'none' : '';
+                logoutBtn.style.display = loggedIn ? '' : 'none';
+            } catch (e) {
+                authBadge.textContent = 'Auth: logged out';
+                loginBtn.style.display = '';
+                logoutBtn.style.display = 'none';
+            }
+        }
+
+        const loginBtn = document.getElementById('login-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+        loginBtn?.addEventListener('click', () => { window.location.href = 'login.html'; });
+        logoutBtn?.addEventListener('click', async () => {
+            try { await fetch(`${API_BASE_URL}/admin/logout`, { method: 'POST', credentials: 'include' }); } catch (e) {}
+            await refreshAuth();
+        });
+
+        function drawSpark(logs){
+            const cvs = document.getElementById('k-spark'); if(!cvs) return; const ctx=cvs.getContext('2d');
+            const W=cvs.width, H=cvs.height; ctx.clearRect(0,0,W,H);
+            const cs = getComputedStyle(document.documentElement);
+            const baseColor = cs.getPropertyValue('--border-color').trim() || '#233';
+            const strokeColor = cs.getPropertyValue('--primary-color').trim() || '#00f5d4';
+            const now=Date.now(), win=10*60*1000, start=now-win, buckets=20, step=win/buckets;
+            const counts = new Array(buckets).fill(0);
+            for(const row of logs){ const t=Date.parse(row.ts||'')||0; if(t<start) continue; const idx=Math.min(buckets-1, Math.max(0, Math.floor((t-start)/step))); counts[idx]++; }
+            const maxV=Math.max(1,...counts);
+            ctx.strokeStyle=baseColor; ctx.beginPath(); ctx.moveTo(0,H-1); ctx.lineTo(W,H-1); ctx.stroke();
+            ctx.strokeStyle=strokeColor; ctx.lineWidth=2; ctx.beginPath();
+            for(let i=0;i<buckets;i++){ const x=(i/(buckets-1))*W; const y=H-2-(counts[i]/maxV)*(H-6); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); }
+            ctx.stroke();
+        }
+
+        async function loadTrialOptions(){
+            try {
+                const res = await fetch(`${API_BASE_URL}/log-options`);
+                if (!res.ok) return;
+                const data = await res.json();
+                const trials = Array.from(new Set([...(data.trials||[]), ...(data.experiments||[])]))
+                                  .filter(Boolean).sort((a,b)=>a<b?-1:a>b?1:0);
+                const sel = document.getElementById('k-trial');
+                sel.innerHTML = '';
+                const optAll = document.createElement('option'); optAll.value = ''; optAll.textContent = 'All'; sel.appendChild(optAll);
+                for (const t of trials){ const o=document.createElement('option'); o.value=t; o.textContent=t; sel.appendChild(o);}                
+                // Restore persisted selection
+                const saved = localStorage.getItem('rootfindingdash.trial') || '';
+                if (saved && trials.includes(saved)) sel.value = saved;
+            } catch {}
+        }
+
+        async function refreshActivity(){
+            try{
+                const trialSel = document.getElementById('k-trial');
+                const params = new URLSearchParams({ n: '50', order: 'latest' });
+                if (trialSel && trialSel.value) params.set('trial', trialSel.value);
+                const res = await fetch(`${API_BASE_URL}/logs?${params.toString()}`);
+                if(!res.ok) return;
+                const d = await res.json();
+                const logs = d.logs || [];
+                document.getElementById('k-logs').textContent = logs.length;
+                const uniq = new Set(logs.map(x => x.student_id).filter(Boolean));
+                document.getElementById('k-students').textContent = uniq.size;
+                drawSpark(logs);
+                document.getElementById('k-upd').textContent = `Updated ${new Date().toLocaleTimeString()}`;
+            } catch {}
+        }
+
+        document.getElementById('k-trial').addEventListener('change', (e)=>{
+            localStorage.setItem('rootfindingdash.trial', e.target.value || '');
+            refreshActivity();
+        });
+
+        document.addEventListener('DOMContentLoaded', ()=>{ refreshActive(); refreshAuth(); loadTrialOptions().then(refreshActivity); setInterval(()=>{ refreshActive(); refreshActivity(); }, 5000); });
+  </script>
+  <script src="scripts/theme.js"></script>
+</body>
+</html>
