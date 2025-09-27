@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Teaching Platform - Admin Login</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-container {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            width: 100%;
+            max-width: 400px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 2rem;
+        }
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: #333;
+        }
+        input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 1rem;
+            box-sizing: border-box;
+        }
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .btn {
+            width: 100%;
+            padding: 0.75rem;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            cursor: pointer;
+            margin-top: 1rem;
+        }
+        .btn:hover {
+            background: #5a6fd8;
+        }
+        .message {
+            padding: 0.75rem;
+            border-radius: 6px;
+            margin-top: 1rem;
+            text-align: center;
+        }
+        .message.error {
+            background: #fee;
+            color: #c33;
+            border: 1px solid #fcc;
+        }
+        .back-link {
+            text-align: center;
+            margin-top: 1rem;
+        }
+        .back-link a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        .back-link a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <h1>🎓 Teaching Platform</h1>
+        <h2 style="text-align: center; color: #666; margin-bottom: 2rem;">Admin Login</h2>
+        <form id="login-form">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" required value="admin">
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" required value="password">
+            </div>
+            <button type="submit" class="btn">Login</button>
+        </form>
+        <div id="message-area" class="message error" style="display: none;"></div>
+        <div class="back-link">
+            <a href="/">← Back to Dashboard</a>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = window.location.origin;
+        const loginForm = document.getElementById('login-form');
+        const messageArea = document.getElementById('message-area');
+
+        loginForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/admin/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ username, password })
+                });
+
+                if (response.ok) {
+                    // Redirect to main dashboard
+                    window.location.href = '/';
+                } else {
+                    let msg = 'Login failed';
+                    try {
+                        const data = await response.json();
+                        if (data && data.detail !== undefined) {
+                            msg = (typeof data.detail === 'string') ? data.detail : JSON.stringify(data.detail);
+                        }
+                    } catch (_) {
+                        try { msg = await response.text(); } catch {}
+                    }
+                    showMessage(msg || 'Login failed', 'error');
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                showMessage('Network error or server unreachable', 'error');
+            }
+        });
+
+        function showMessage(msg, type) {
+            messageArea.textContent = msg;
+            messageArea.className = `message ${type}`;
+            messageArea.style.display = 'block';
+            setTimeout(() => { messageArea.style.display = 'none'; }, 3000);
+        }
+
+        // Check if already authenticated
+        async function checkAuth() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/auth-status`, {
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.authenticated) {
+                        window.location.href = '/';
+                    }
+                }
+            } catch (error) {
+                // Ignore auth check errors
+            }
+        }
+
+        checkAuth();
+    </script>
+</body>
+</html>

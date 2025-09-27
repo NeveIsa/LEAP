@@ -117,7 +117,7 @@
         </div>
         <div class="toolbar" style="margin-top:16px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
             <span class="badge" id="active-badge">Active: …</span>
-            <span class="badge" id="auth-badge">Logged in for: none</span>
+            <span class="badge" id="auth-badge">Status: Not logged in</span>
             <span id="lock-note" class="text-muted" style="display:none; font-size:13px;">Stop the active experiment to launch another.</span>
             <div style="flex:1"></div>
             <button class="btn" id="refresh">Refresh</button>
@@ -148,14 +148,16 @@
                 const [experiments, activeObj, authObj] = await Promise.all([
                     fetchJSON('/api/experiments'),
                     fetchJSON('/api/active-experiment').catch(() => ({ active: null })),
-                    fetchJSON('/api/auth-experiments').catch(() => ({ auth: [] })),
+                    fetchJSON('/api/auth-status').catch(() => ({ authenticated: false })),
                 ]);
                 const active = activeObj && typeof activeObj === 'object' ? activeObj.active : null;
                 activeBadge.textContent = `Active: ${active || 'none'}`;
                 activeBadge.classList.toggle('pulse', !!active);
                 lockNote.style.display = active ? '' : 'none';
-                const authList = Array.isArray(authObj?.auth) ? authObj.auth : [];
-                authBadge.textContent = `Logged in for: ${authList.length ? authList.join(', ') : 'none'}`;
+                const isAuthenticated = authObj?.authenticated || false;
+                authBadge.textContent = `Status: ${isAuthenticated ? 'Logged in' : 'Not logged in'}`;
+                authBadge.style.background = isAuthenticated ? 'var(--lp-good)' : '';
+                authBadge.style.color = isAuthenticated ? '#0b1022' : '';
                 if (!Array.isArray(experiments) || experiments.length === 0) {
                     const tr = document.createElement('tr');
                     tr.innerHTML = `<td colspan="3" style="text-align:center;">No experiments found.</td>`;
@@ -199,104 +201,73 @@
                 await refreshExperiments();
             } catch (e) {
                 if (e && e.status === 401 && !_retry) {
-                    const ok = await showLoginModal(name);
-                    if (ok) return handleAction(action, name, true);
-                    return; // user canceled
+                    // Redirect to global login page
+                    window.location.href = '/login';
+                    return;
                 }
                 alert(`Action failed: ${e.detail || e.message || e}`);
             }
         }
 
-        // --- Inline Login Modal ---
-        function showLoginModal(expName) {
-            return new Promise((resolve) => {
-                const modal = ensureLoginModal();
-                const form = modal.querySelector('form');
-                const btnClose = modal.querySelector('[data-close]');
-                const errBox = modal.querySelector('[data-error]');
-                errBox.textContent = '';
-                modal.style.display = 'flex';
-
-                const onClose = () => {
-                    cleanup();
-                    modal.style.display = 'none';
-                    resolve(false);
-                };
-                btnClose.onclick = onClose;
-                modal.onclick = (ev) => { if (ev.target === modal) onClose(); };
-
-                // Set target experiment name in the modal header badge
-                const expBadge = modal.querySelector('#lp-exp-badge');
-                if (expBadge) expBadge.textContent = expName || 'unknown';
-
-                const onSubmit = async (ev) => {
-                    ev.preventDefault();
-                    errBox.textContent = '';
-                    const username = form.querySelector('input[name="username"]').value.trim();
-                    const password = form.querySelector('input[name="password"]').value.trim();
-                    try {
-                        // Authenticate against the target experiment's admin
-                        const res = await fetch(`/exp/${expName}/admin/login`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            credentials: 'include',
-                            body: JSON.stringify({ username, password })
-                        });
-                        if (!res.ok) {
-                            let detail = 'Login failed';
-                            try { detail = (await res.json()).detail || detail; } catch {}
-                            errBox.textContent = detail;
-                            return;
+        // Add login button to toolbar
+        function addLoginButton() {
+            const toolbar = document.querySelector('.toolbar');
+            const authBadge = document.getElementById('auth-badge');
+            
+            // Check if login button already exists
+            if (document.getElementById('login-btn')) return;
+            
+            const loginBtn = document.createElement('a');
+            loginBtn.id = 'login-btn';
+            loginBtn.className = 'btn';
+            loginBtn.href = '/login';
+            loginBtn.textContent = 'Login';
+            
+            // Insert login button after auth badge
+            authBadge.parentNode.insertBefore(loginBtn, authBadge.nextSibling);
+        }
+        
+        function updateLoginButton() {
+            const loginBtn = document.getElementById('login-btn');
+            if (!loginBtn) return;
+            
+            // Update button based on auth status
+            fetchJSON('/api/auth-status').then(data => {
+                if (data.authenticated) {
+                    loginBtn.textContent = 'Logout';
+                    loginBtn.href = '#';
+                    loginBtn.onclick = async (e) => {
+                        e.preventDefault();
+                        try {
+                            await fetchJSON('/admin/logout', { method: 'POST' });
+                            await refreshExperiments();
+                        } catch (error) {
+                            console.error('Logout error:', error);
                         }
-                        cleanup();
-                        modal.style.display = 'none';
-                        resolve(true);
-                    } catch (err) {
-                        errBox.textContent = 'Network error. Try again.';
-                    }
-                };
-                form.addEventListener('submit', onSubmit);
-
-                function cleanup() {
-                    form.removeEventListener('submit', onSubmit);
-                    btnClose.onclick = null;
-                    modal.onclick = null;
+                    };
+                } else {
+                    loginBtn.textContent = 'Login';
+                    loginBtn.href = '/login';
+                    loginBtn.onclick = null;
                 }
+            }).catch(() => {
+                loginBtn.textContent = 'Login';
+                loginBtn.href = '/login';
+                loginBtn.onclick = null;
             });
         }
 
-        function ensureLoginModal() {
-            let modal = document.getElementById('login-modal');
-            if (modal) return modal;
-            modal = document.createElement('div');
-            modal.id = 'login-modal';
-            modal.className = 'lp-modal';
-            modal.innerHTML = [
-                '<div class="lp-dialog">',
-                '  <div class="lp-head">',
-                '    <div class="lp-logo" aria-hidden="true"></div>',
-                '    <h3>Admin Login</h3>',
-                '    <span class="badge" id="lp-exp-badge">&nbsp;</span>',
-                '  </div>',
-                '  <form class="lp-form">',
-                '    <label class="lp-label" for="lp-username">Username</label>',
-                '    <input class="lp-input" id="lp-username" type="text" name="username" value="admin" autocomplete="username" />',
-                '    <label class="lp-label" for="lp-password">Password</label>',
-                '    <input class="lp-input" id="lp-password" type="password" name="password" value="password" autocomplete="current-password" />',
-                '    <div class="lp-actions">',
-                '      <span data-error class="lp-error"></span>',
-                '      <button type="button" class="btn ghost" data-close>Cancel</button>',
-                '      <button type="submit" class="btn">Login</button>',
-                '    </div>',
-                '  </form>',
-                '</div>'
-            ].join('\n');
-            document.body.appendChild(modal);
-            return modal;
-        }
-
-        document.addEventListener('DOMContentLoaded', refreshExperiments);
-        document.getElementById('refresh').addEventListener('click', refreshExperiments);
+        document.addEventListener('DOMContentLoaded', () => {
+            addLoginButton();
+            refreshExperiments().then(() => {
+                updateLoginButton();
+            });
+        });
+        document.getElementById('refresh').addEventListener('click', () => {
+            refreshExperiments().then(() => {
+                updateLoginButton();
+            });
+        });
         document.addEventListener('click', (ev) => {
             const btn = ev.target.closest('button.btn[data-action][data-exp]');
             if (!btn) return;

@@ -9,8 +9,8 @@ from .utils import load_admin_credentials
 def load_default_admin_credentials():
     """Load default admin credentials."""
     try:
-        admin_creds_path = os.path.join(os.path.dirname(__file__), "..", "admin_credentials.json")
-        return load_admin_credentials(admin_creds_path)
+        # Use global admin credentials
+        return load_admin_credentials()
     except Exception:
         # Fallback to default weak credentials
         print("🔓 Using default development credentials (admin/password) - change for production!")
@@ -18,23 +18,16 @@ def load_default_admin_credentials():
         rec = make_password_hash("password")
         return "admin", _build_verifier_from_record(rec)
 
-def is_authed_for_experiment(request: Request, experiment_name: str) -> bool:
-    """Check if the request is authenticated for a specific experiment."""
+def is_authenticated(request: Request) -> bool:
+    """Check if the request is globally authenticated."""
     try:
-        auth_experiments = request.session.get("auth_experiments") or {}
-        return auth_experiments.get(experiment_name, False)
+        return bool(request.session.get("authenticated"))
     except Exception:
         return False
 
-def root_is_admin_authenticated(request: Request, active_experiment_getter):
-    """Root authentication check with fallback to active experiment auth."""
-    # Root auth via global flag or scoped experiment auth for the active experiment
+def root_is_admin_authenticated(request: Request):
+    """Root authentication check."""
+    # Global authentication check
     if request.session.get("authenticated"):
         return True
-    try:
-        active = active_experiment_getter()
-        if active and is_authed_for_experiment(request, active):
-            return True
-    except Exception:
-        pass
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")

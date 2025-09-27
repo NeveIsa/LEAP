@@ -157,8 +157,6 @@ def create_experiment_app(experiment_name: str) -> FastAPI:
         logging.info("Database file not found at %s. A new one will be created.", db_path)
     funcs_dir = os.path.join(experiment_dir, "funcs")
     ui_dir = os.path.join(experiment_dir, "ui")
-    admin_creds_path = os.path.join(experiment_dir, "admin_credentials.json")
-
     logging.debug("Creating app for experiment '%s' with db_path: %s", experiment_name, db_path)
     storage = Storage(db_path)
 
@@ -179,7 +177,8 @@ def create_experiment_app(experiment_name: str) -> FastAPI:
     # middleware does not wrap mounted sub-apps in Starlette.
     app.add_middleware(SessionMiddleware, secret_key=_DERIVED_SESSION_SECRET, **SESSION_KW)
 
-    ADMIN_USERNAME, ADMIN_PASSWORD = _load_admin_credentials_from_path(admin_creds_path)
+    # Use global admin credentials
+    ADMIN_USERNAME, ADMIN_PASSWORD = _load_admin_credentials_from_path()
 
     class LoginRequest(BaseModel):
         username: str
@@ -487,25 +486,28 @@ if _DEFAULT_EXPERIMENT:
     _default_db_path = os.path.join(_default_exp_dir, "db/students.db")
     _default_funcs_dir = os.path.join(_default_exp_dir, "funcs")
     _default_ui_dir = os.path.join(_default_exp_dir, "ui")
-    _default_admin_creds = os.path.join(_default_exp_dir, "admin_credentials.json")
-
     logging.info("Discovered default context: '%s' (UI binds here). Root APIs operate on the active experiment.", _DEFAULT_EXPERIMENT)
 
     _default_storage = Storage(_default_db_path)
     _default_function_registry: Dict[str, Callable[..., Any]] = _load_functions_from_directory(_default_funcs_dir)
-    _DEFAULT_ADMIN_USERNAME, _DEFAULT_ADMIN_VERIFY = _load_admin_credentials_from_path(_default_admin_creds)
+    # Use global admin credentials instead of per-experiment credentials
+    _DEFAULT_ADMIN_USERNAME, _DEFAULT_ADMIN_VERIFY = _load_admin_credentials_from_path()
 else:
     _default_ui_dir = os.path.join(_project_root, "experiments", "default", "ui")
     _default_storage = None
     _default_function_registry = {}
-    _DEFAULT_ADMIN_USERNAME = "admin"
-    _DEFAULT_ADMIN_VERIFY = lambda pw: (pw == "password")
+    # Use global admin credentials
+    _DEFAULT_ADMIN_USERNAME, _DEFAULT_ADMIN_VERIFY = _load_admin_credentials_from_path()
 
 # Removed root-mounted /ui and /static; use canonical /exp/<experiment>/ui only.
 
 @app.get("/")
 async def read_index():
     return FileResponse(os.path.join(_current_dir, 'landing/index.html'))
+
+@app.get("/login")
+async def read_login():
+    return FileResponse(os.path.join(_current_dir, 'landing/login.html'))
 
 @app.get("/api/experiments")
 def list_experiments():
@@ -531,28 +533,23 @@ def _require_root_admin_for_api(request: Request):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     return True
 
-def _is_authed_for_experiment(request: Request, exp_name: str) -> bool:
+def _is_authenticated(request: Request) -> bool:
+    """Check if user is globally authenticated."""
     try:
-        auth_map = request.session.get("auth_experiments") or {}
-        return bool(auth_map.get(exp_name))
+        return bool(request.session.get("authenticated"))
     except Exception:
         return False
 
-@app.get("/api/auth-experiments")
-def list_authed_experiments(request: Request):
-    """Return experiments for which this session has admin auth."""
-    try:
-        auth_map = request.session.get("auth_experiments") or {}
-        names = sorted([k for k, v in auth_map.items() if v])
-    except Exception:
-        names = []
-    return {"auth": names}
+@app.get("/api/auth-status")
+def get_auth_status(request: Request):
+    """Return authentication status."""
+    return {"authenticated": _is_authenticated(request)}
 
 @app.post("/api/experiments/start")
 def start_experiment(body: _StartExperimentBody, request: Request):
-    # Require admin auth specifically for the target experiment
-    if not _is_authed_for_experiment(request, body.name):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Not authenticated for experiment '{body.name}'")
+    # Require global admin authentication
+    if not _is_authenticated(request):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     global _ACTIVE_EXPERIMENT
     # Allow dynamic addition of experiment folders without restart
     exp_path = os.path.join(_experiments_dir, body.name)
@@ -577,14 +574,14 @@ def stop_experiment(request: Request):
     active = _server_state.get_active_experiment()
     if not active:
         raise HTTPException(status_code=400, detail="No active experiment to stop")
-    # Require admin auth for the active experiment
-    if not _is_authed_for_experiment(request, active):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Not authenticated for experiment '{active}'")
+    # Require global admin authentication
+    if not _is_authenticated(request):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     prev = active
     _server_state.set_active_experiment(None)
-    # Stricter isolation: clear all experiment auth so future launches require re-login
+    # Clear authentication on stop
     try:
-        request.session["auth_experiments"] = {}
+        request.session.clear()
     except Exception:
         pass
     return {"stopped": prev, "active": None}
@@ -615,15 +612,9 @@ async def root_login(request: Request, login_data: _RootLoginRequest):
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
 def _root_is_admin_authenticated(request: Request):
-    # Root auth via global flag or scoped experiment auth for the active experiment
+    # Global authentication check
     if request.session.get("authenticated"):
         return True
-    try:
-        active = _server_state.get_active_experiment()
-        if active and _is_authed_for_experiment(request, active):
-            return True
-    except Exception:
-        pass
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
 @app.post("/admin/logout")

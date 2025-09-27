@@ -111,7 +111,7 @@ def _build_verifier_from_record(record: Dict[str, Any]):
 
     return verify
 
-def load_admin_credentials(admin_creds_path: str) -> tuple[str, callable]:
+def load_admin_credentials(admin_creds_path: str = None) -> tuple[str, callable]:
     """Return (username, verify_fn) for admin auth.
     
     Automatically migrates plaintext passwords to hashed format when detected.
@@ -120,12 +120,19 @@ def load_admin_credentials(admin_creds_path: str) -> tuple[str, callable]:
     - JSON file supports:
         {"username": "...", "password_hash": "...", "salt": "...", "iterations": 240000, "algorithm": "pbkdf2_sha256"}
       Legacy plaintext {"username": "...", "password": "..."} is automatically migrated to hashed format.
+    - If admin_creds_path is None, looks for global admin_credentials.json in project root
     """
     env_user = os.environ.get("ADMIN_USERNAME")
     env_pass = os.environ.get("ADMIN_PASSWORD")
     if env_user and env_pass:
         rec = make_password_hash(env_pass)
         return env_user, _build_verifier_from_record(rec)
+    
+    # If no path provided, use global admin credentials
+    if admin_creds_path is None:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(current_dir)
+        admin_creds_path = os.path.join(project_root, "admin_credentials.json")
 
     try:
         if os.path.isfile(admin_creds_path):
@@ -233,7 +240,7 @@ def build_experiment_app(
         logging.info("Database file not found at %s. A new one will be created.", db_path)
     funcs_dir = os.path.join(experiment_dir, "funcs")
     ui_dir = os.path.join(experiment_dir, "ui")
-    admin_creds_path = os.path.join(experiment_dir, "admin_credentials.json")
+    # No longer using per-experiment credentials
 
     logging.debug("Creating app for experiment '%s' with db_path: %s", experiment_name, db_path)
     storage = Storage(db_path)
@@ -245,9 +252,9 @@ def build_experiment_app(
     app.add_middleware(ActiveExperimentUIGuard, experiment_name=experiment_name, current_active=current_active)
     app.add_middleware(SessionMiddleware, secret_key=session_secret, **session_cookie_opts)
 
-    # Minimal per-experiment admin endpoints so each experiment can own its credentials.
+    # Use global admin credentials for all experiments
     # Session cookie is shared (path=/), so logging in here authenticates root admin APIs.
-    ADMIN_USERNAME, ADMIN_VERIFY = load_admin_credentials(admin_creds_path)
+    ADMIN_USERNAME, ADMIN_VERIFY = load_admin_credentials()
 
     @app.post("/admin/login")
     async def login(request: Request):
@@ -266,34 +273,22 @@ def build_experiment_app(
             except Exception:
                 pass
         if username == ADMIN_USERNAME and ADMIN_VERIFY(password or ""):
-            # Scope authentication to this experiment; root APIs will check this map.
-            auth_map = request.session.get("auth_experiments") or {}
-            auth_map[experiment_name] = True
-            request.session["auth_experiments"] = auth_map
+            # Set global authentication flag instead of per-experiment
+            request.session["authenticated"] = True
             return {"message": "Login successful"}
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
     @app.post("/admin/logout")
     async def logout(request: Request, response: Response):
-        # Remove auth only for this experiment
-        try:
-            auth_map = request.session.get("auth_experiments") or {}
-            if experiment_name in auth_map:
-                auth_map.pop(experiment_name, None)
-                request.session["auth_experiments"] = auth_map
-        except Exception:
-            pass
+        # Clear global authentication
+        request.session.clear()
         return {"message": "Logged out"}
 
     @app.get("/admin/ping")
     async def admin_ping(request: Request):
-        try:
-            auth_map = request.session.get("auth_experiments") or {}
-            if auth_map.get(experiment_name, False):
-                return {"ok": True}
-        except Exception:
-            pass
-        # Not authenticated for this experiment
+        if request.session.get("authenticated"):
+            return {"ok": True}
+        # Not authenticated
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
     @app.get("/files")
