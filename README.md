@@ -1,6 +1,6 @@
-# Interactive Classroom for Numerical Methods
+# LEAP: Live Experiments for Active Pedagogy
 
-A FastAPI-based server and simple Python client for teaching and experimenting with numerical methods. Instructors publish Python functions; students call them over HTTP. Every call is logged to a local DuckDB database and can be visualized via a lightweight UI.
+An interactive learning platform that exposes Python functions as HTTP endpoints, enabling students to explore algorithms through live experimentation. Instructors create computational labs; students call functions remotely while all interactions are logged for comprehensive analytics.
 
 ## Highlights
 
@@ -8,18 +8,18 @@ A FastAPI-based server and simple Python client for teaching and experimenting w
 - Dynamic function loading from `experiments/<name>/funcs/*.py`
 - Persistent logging (args, results, errors) via SQLAlchemy + DuckDB
 - Simple student client (`client/client.py`) for quick onboarding
-- Per‑experiment admin login; landing page to launch/stop experiments
-- PBKDF2‑hashed credentials with auto‑migration from plaintext
+- **Unified authentication** - single login for dashboard access across all labs
+- PBKDF2‑hashed credentials (240,000 iterations) with secure session management
 
 ## Project Layout
 
 - `server/` – FastAPI app and utilities
 - `client/` – Example Python client
-- `experiments/<name>/` – Experiment bundles:
+- `experiments/<name>/` – Lab bundles:
   - `funcs/` public instructor functions
   - `ui/` HTML dashboard/pages
   - `db/` local DuckDB file (created on first run)
-  - `admin_credentials.json` per‑experiment admin account
+- `admin_credentials.json` – Global admin account (root level)
 
 ## Quick Start
 
@@ -28,14 +28,15 @@ Prerequisites: Python 3.10+ recommended
 - Install dependencies: `pip install -r req.txt`
 - Run the server: `make` or `uvicorn server.rpc_server:app --host 0.0.0.0 --port 9000`
 - Open the landing page: `http://localhost:9000/`
-- Click Launch next to an experiment (e.g., `default` or `quizlab`) and log in
-- Open the experiment UI from the table (e.g., `/exp/default/ui/dashboard.html`)
+- Log in once with global admin credentials to access all labs
+- Click Launch next to a lab (e.g., `default` or `quizlab`)
+- Open the lab UI from the table (e.g., `/exp/default/ui/dashboard.html`)
 
 Tip: Use `DEFAULT_EXPERIMENT=default` to set which experiment root APIs bind to.
 
 ## Admin Credentials
 
-Recommended hashed format in `experiments/<exp>/admin_credentials.json`:
+Global admin credentials in `admin_credentials.json` (root level):
 
 ```
 {
@@ -56,9 +57,9 @@ Recommended hashed format in `experiments/<exp>/admin_credentials.json`:
 - Start: `make` or `uvicorn server.rpc_server:app --host 0.0.0.0 --port 9000`
 - Health: `GET /api/health` → `{ ok, active, version }`
 - List experiments: `GET /api/experiments`
-- Start/stop active experiment from the landing page or via `/api/experiments/*` endpoints
+- Start/stop active lab from the landing page or via `/api/experiments/*` endpoints
 
-Root endpoints operate on the active experiment and require explicit `experiment_name` when calling functions:
+Root endpoints operate on the active lab and require explicit `experiment_name` when calling functions:
 
 - `GET /functions` – list available functions and signatures
 - `POST /call` – invoke a function and log the result
@@ -83,7 +84,7 @@ Sample `/call` payload:
 
 - Filters (query params):
   - Student: `student_id` or `sid`
-  - Trial tag: `trial` or `trial_name` (legacy: `experiment` or `exp`)
+  - Trial tag: `trial` or `trial_name` (legacy: `lab` or `exp`)
   - Time range: `start_time`, `end_time` (ISO 8601)
   - Limit/order: `n` (1–10,000), `order` = `latest` | `earliest`
 - Examples:
@@ -112,7 +113,7 @@ def cubic(x: float) -> float:
 ## QuizLab Quizzes
 
 - Authoring
-  - Place quiz Markdown files under `experiments/<experiment>/ui/quiz/` (e.g., `questions.md`, `derivatives.md`).
+  - Place quiz Markdown files under `experiments/<lab>/ui/quiz/` (e.g., `questions.md`, `derivatives.md`).
   - Question header: `## Question <num>: <id>` (e.g., `## Question 1: q1`).
   - Prompt: first bold line is the question (e.g., `**Derivative of x^2**`).
   - Choices and type:
@@ -124,7 +125,7 @@ def cubic(x: float) -> float:
     - LaTeX math via `$...$` and `$$...$$`
 
 - Quiz page: `/exp/quizlab/ui/quiz.html`
-  - Auto‑detects quiz files via `GET /exp/<experiment>/files?ext=md&dir=quiz` (with a local fallback probe).
+  - Auto‑detects quiz files via `GET /exp/<lab>/files?ext=md&dir=quiz` (with a local fallback probe).
   - Dropdown to choose the quiz; per‑question submit logs an answer via `/call`.
   - Registration pill checks `GET /is-registered?student_id=...`.
   - Submissions include `quizname` (file name without `.md`).
@@ -137,7 +138,7 @@ def cubic(x: float) -> float:
   - CSV export; truncation banner when exactly 10,000 logs are returned.
 
 - API additions
-  - `GET /exp/<experiment>/files?ext=md&dir=quiz` → `{ files: ["questions.md", ...] }`
+  - `GET /exp/<lab>/files?ext=md&dir=quiz` → `{ files: ["questions.md", ...] }`
 
 - Authoring guide: see `experiments/quizlab/ui/QUIZ_AUTHORING.md`
 
@@ -152,7 +153,7 @@ def cubic(x: float) -> float:
 
 - FastAPI, Uvicorn
 - SQLAlchemy 2.0, DuckDB (duckdb-engine)
-- Marimo (optional dashboard experiments)
+- Marimo (optional dashboard labs)
 - Python client via `requests`
  
 ## Shared UI Templates (Students + Logs)
@@ -163,9 +164,9 @@ To avoid duplicating student and log pages across experiments, this repo include
   - `templates/students.html` – add/list/delete students; clear logs for a student
   - `templates/logs.html` – view logs with filters (student, trial, order, time window)
 - Styling and theming:
-  - Each experiment can provide an optional theme at `experiments/<exp>/ui/style/theme.css`.
-  - The templates include `<link rel="stylesheet" href="style/theme.css">` so the experiment’s theme is automatically applied when the file is served under the experiment’s UI.
-- Recommended usage (symlink into each experiment):
+  - Each lab can provide an optional theme at `experiments/<exp>/ui/style/theme.css`.
+  - The templates include `<link rel="stylesheet" href="style/theme.css">` so the lab’s theme is automatically applied when the file is served under the lab’s UI.
+- Recommended usage (symlink into each lab):
 
 ```
 # Students page
