@@ -24,9 +24,9 @@ body main{
 ## A Unified Framework for Algorithm Exploration, Real-Time Analytics, and Live Assessment
 
 ### Abstract
-Interactive computational exercises can help students explore algorithmic concepts through direct experimentation. We present a platform that exposes Python functions as HTTP endpoints, allowing students to call functions remotely while logging all interactions for later analysis. 
+Interactive computational exercises can help students explore algorithmic concepts through direct labation. We present a platform that exposes Python functions as HTTP endpoints, allowing students to call functions remotely while logging all interactions for later analysis. 
 
-The platform organizes content as modular "experiments" containing callable Python functions. Current implementation includes 9 experiments with simple functions for educational exploration: basic mathematical functions (square, cubic, quadratic), optimization functions (Rosenbrock), graph traversal helpers, Monte Carlo sampling, differential equation examples, and matrix operations. Students call these functions via HTTP from any client while all interactions are logged to DuckDB. The system includes unified authentication and a quiz framework for one experiment.
+The platform organizes content as modular "labs" containing callable Python functions. Current implementation includes 9 labs with simple functions for educational exploration: basic mathematical functions (square, cubic, quadratic), optimization functions (Rosenbrock), graph traversal helpers, Monte Carlo sampling, differential equation examples, and matrix operations. Students call these functions via HTTP from any client while all interactions are logged to DuckDB. The system includes unified authentication and a quiz framework for one lab.
 
 We describe the system architecture and current implementation. The platform is available as open-source software and designed to support educational research through interaction logging.
 
@@ -47,41 +47,41 @@ The platform uses a RESTful architecture built on FastAPI, providing access to c
 - **`/functions`** — Dynamic function discovery and signature introspection
 - **`/call`** — Synchronous function execution with comprehensive error handling
 - **`/logs`** — Flexible querying interface supporting temporal and contextual filtering
-- **`/experiments`** — Session management and experiment lifecycle control
+- **`/labs`** — Session management and lab lifecycle control
 - **`/admin`** — Authentication and administrative operations
 
-**2.2 Modular Experiment Architecture**
+**2.2 Modular Lab Architecture**
 
 Pedagogical content follows a **self-contained module design** enabling independent deployment:
 
 ```
-experiments/<module>/
+labs/<module>/
 ├── funcs/          # Instructor-authored computational functions
 ├── ui/             # Interactive dashboards and visualizations  
 ├── quiz/           # Assessment materials (Markdown + LaTeX)
 └── db/             # Isolated DuckDB analytics store
 ```
 
-This design allows multiple experiments to run while sharing a common API.
+This design allows multiple labs to run while sharing a common API.
 
 **2.3 Analytics Infrastructure**
 
 Every student interaction generates a **structured log entry** preserving:
 - Function invocation details (name, arguments, timestamp)
 - Execution results or comprehensive error traces
-- Session context (student ID, experiment, trial identification)
+- Session context (student ID, lab, trial identification)
 - Performance metrics (execution time, resource utilization)
 
 DuckDB's **columnar storage engine** enables efficient analytics queries over extensive interaction datasets, supporting real-time dashboards and longitudinal analysis.
 
 **2.4 Security and Authentication**
 
-The platform uses unified authentication across all experiments:
+The platform uses unified authentication across all labs:
 
 - **PBKDF2 credential hashing** (240,000 iterations, SHA-256)
 - **Session-based access control** with configurable timeouts
-- **Global authentication scope** enabling seamless cross-experiment navigation
-- **Data isolation** maintaining experiment-level privacy boundaries
+- **Global authentication scope** enabling seamless cross-lab navigation
+- **Data isolation** maintaining lab-level privacy boundaries
 
 **Figure 1: System Architecture**
 
@@ -99,7 +99,7 @@ The platform uses unified authentication across all experiments:
 
 **3.1 Current Function Library**
 
-The platform includes simple computational functions across several experiments:
+The platform includes simple computational functions across several labs:
 
 - **Basic mathematics:** Square, cubic, and quadratic functions for algorithm exploration
 - **Optimization:** Rosenbrock function for testing optimization approaches  
@@ -119,7 +119,7 @@ Students interact with functions through HTTP calls:
 
 **3.3 Assessment and Monitoring**
 
-- **Quiz system:** One experiment (quizlab) includes Markdown-based quizzes with LaTeX math support
+- **Quiz system:** One lab (quizlab) includes Markdown-based quizzes with LaTeX math support
 - **Interaction logs:** Comprehensive logging enables instructors to review student exploration patterns
 - **Dashboard UI:** Web interfaces provide access to functions and basic monitoring
 
@@ -127,8 +127,8 @@ Students interact with functions through HTTP calls:
 
 - **Data storage:** DuckDB database for interaction logging and analytics
 - **Web framework:** FastAPI-based server with RESTful endpoints
-- **Authentication:** Unified login system across all experiments
-- **Experiment isolation:** Each experiment has its own function namespace and data
+- **Authentication:** Unified login system across all labs
+- **Lab isolation:** Each lab has its own function namespace and data
 
 **3.5 Multi-Modal Client Architecture**
 
@@ -158,7 +158,7 @@ We propose a mixed-methods evaluation framework to assess the platform's educati
 Planned metrics for analyzing interaction logs include:
 
 - **Exploration patterns:** Function call frequency and parameter variation strategies
-- **Cross-domain usage:** Student transitions between different algorithmic experiments
+- **Cross-domain usage:** Student transitions between different algorithmic labs
 - **Session duration:** Time spent on algorithmic exploration tasks
 - **Error patterns:** Analysis of mistakes and correction strategies
 
@@ -175,7 +175,7 @@ Proposed pre/post evaluation using computational thinking assessments:
 Planned instructor feedback collection on:
 
 - **Setup time:** Deployment efficiency compared to traditional lab configuration
-- **Content creation:** Ease of developing new computational experiments
+- **Content creation:** Ease of developing new computational labs
 - **Classroom monitoring:** Visibility into student learning during live sessions
 
 **4.5 Implementation and Evaluation Timeline**
@@ -198,8 +198,8 @@ This work presents a simple platform for exposing computational functions to stu
 - **Unified authentication architecture** reducing cognitive load while maintaining security isolation
 - **Language-agnostic API design** enabling diverse client ecosystem integration
 - **Real-time analytics infrastructure** providing immediate instructional feedback at scale
-- **Modular experiment architecture** supporting independent content development and deployment
-- **Standard experiment templates** enabling instructors to rapidly create new labs and experiments through drag-and-drop functionality
+- **Modular lab architecture** supporting independent content development and deployment
+- **Standard lab templates** enabling instructors to rapidly create new labs and labs through drag-and-drop functionality
 
 **5.2 Pedagogical Impact**
 
@@ -213,7 +213,7 @@ The platform is available as open-source software. The system uses standard web 
 
 The comprehensive interaction logging infrastructure creates new opportunities for computational education research. Fine-grained behavioral data enables investigation of learning transfer between algorithmic domains, identification of common misconception patterns, and development of adaptive instructional interventions.
 
-**Platform Status:** Current implementation includes 9 experiments with basic functions: mathematical operations (square, cubic, quadratic), the Rosenbrock function, graph grid navigation helpers, Monte Carlo sampling functions, simple differential equation examples, and basic matrix operations. The system includes unified authentication and logging infrastructure.
+**Platform Status:** Current implementation includes 9 labs with basic functions: mathematical operations (square, cubic, quadratic), the Rosenbrock function, graph grid navigation helpers, Monte Carlo sampling functions, simple differential equation examples, and basic matrix operations. The system includes unified authentication and logging infrastructure.
 
 ---
 
